@@ -86,3 +86,12 @@ Open `http://localhost:8001`.
 - role branches: branch from `dev`, then merge back into `dev`.
 
 See `docs/BRANCHING.md`.
+
+## Backend API Docs
+
+Current backend API documentation is focused on page data, schema design, and study logging.
+
+- `backend/api-docs/netflix-demo-api.md`: Netflix demo schema, Mermaid ER diagram, indexes, response models, and endpoint specs.
+- `backend/supabase/README.md`: Supabase schema/migration workspace notes.
+
+AI-agent-specific endpoints are not finalized yet. Add them only after the AI request/display contracts are agreed.
