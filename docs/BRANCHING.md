@@ -16,47 +16,42 @@ Stable deployment branch.
 
 Integration branch for active development.
 
-- Everyone branches from latest `dev`.
+- Each role works on its fixed role branch.
 - Role branches merge back into `dev`.
 - `dev` can be unstable while features are being integrated, but it should be restored to a runnable state before merging to `main`.
 
 ## Role Branches
 
-Use role-based branch prefixes:
+Use fixed role branches:
 
 ```text
-frontend/<short-task>
-backend/<short-task>
-ai-nl/<short-task>
-ai-display/<short-task>
-docs/<short-task>
+frontend
+backend
+ai-nl
+ai-display
 ```
 
-Examples:
+Optional docs-only changes can be made on the role branch related to the change. If the docs affect everyone, use `dev` directly only after team agreement.
 
-```text
-frontend/amazon-numbered-cards
-backend/supabase-schema
-ai-nl/command-parser
-ai-display/evidence-overlay-payload
-docs/study-plan-update
-```
+Do not create many task-specific branches unless the team explicitly decides to switch workflows.
 
 ## Recommended Workflow
 
 1. Pull latest `dev`.
-2. Create a role branch from `dev`.
-3. Work only in your owned area when possible.
-4. Update docs if the contract or behavior changes.
-5. Run the relevant demo or validation checks.
-6. Open a pull request into `dev`.
-7. Request review from any role affected by your change.
-8. Merge to `dev` after conflicts and contract changes are resolved.
-9. Periodically merge `dev` to `main` for deployment/demo checkpoints.
+2. Switch to your fixed role branch.
+3. Merge or rebase latest `dev` into your role branch before starting work.
+4. Work only in your owned area when possible.
+5. Update docs if the contract or behavior changes.
+6. Run the relevant demo or validation checks.
+7. Push your role branch.
+8. Open a pull request from your role branch into `dev`.
+9. Request review from any role affected by your change.
+10. Merge to `dev` after conflicts and contract changes are resolved.
+11. Periodically merge `dev` to `main` for deployment/demo checkpoints.
 
 ## Ownership Rules
 
-## Frontend Branches
+## `frontend`
 
 Primary paths:
 
@@ -65,7 +60,7 @@ Primary paths:
 
 Needs review from backend or AI if API contracts or AI payload rendering changes.
 
-## Backend Branches
+## `backend`
 
 Primary paths:
 
@@ -73,7 +68,7 @@ Primary paths:
 
 Needs review from frontend and AI if endpoint payloads change.
 
-## AI NL Branches
+## `ai-nl`
 
 Primary paths:
 
@@ -82,7 +77,7 @@ Primary paths:
 
 Needs review from backend if task request schemas change.
 
-## AI Display Branches
+## `ai-display`
 
 Primary paths:
 

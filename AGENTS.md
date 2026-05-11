@@ -25,7 +25,7 @@ Use `docs/archive/Proposal-1.md` only for historical context.
 
 ## Rules
 
-- Use role branches such as `frontend/<task>`, `backend/<task>`, `ai-nl/<task>`, and `ai-display/<task>`.
+- Use fixed role branches: `frontend`, `backend`, `ai-nl`, and `ai-display`.
 - Keep app-local data inside the app directory unless backend needs shared seed data.
 - Update docs only when behavior, data shape, or study flow changes.
 - Prefer small changes over broad restructuring.
