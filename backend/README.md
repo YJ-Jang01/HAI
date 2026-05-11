@@ -49,7 +49,11 @@ Put backend API documents here:
 - request/response examples
 - error codes
 - auth requirements
-- API contracts for AI agents
+- frontend/backend data contracts
+
+Current API document:
+
+- `api-docs/netflix-demo-api.md`: Netflix page-data API, 4NF schema, Mermaid ER diagram, recommended indexes, response models, and error model.
 
 ## `deployment/`
 
@@ -68,16 +72,17 @@ Initial schema should cover:
 - demo sites
 - products or media items
 - reviews or evidence sources
-- AI evidence summaries
 - user study sessions
 - interaction logs
 - tasks and conditions
 
+AI evidence summaries and AI task tables should be added after the AI request/display contracts are finalized.
+
 ## Integration Rule
 
-Backend should expose data in a shape that is easy for both:
+Backend should expose data in a shape that is easy for:
 
 - frontend UI rendering
-- AI display-agent transformation
+- future AI integration
 
 If the API changes, update `docs/IMPLEMENTATION.md` and `backend/api-docs/`.

@@ -5,20 +5,30 @@ This directory stores backend API documentation.
 ## What Belongs Here
 
 - Endpoint specifications.
+- Database schema used by the endpoints.
+- Mermaid schema diagrams when useful.
+- Recommended indexes for endpoint lookup/filter/order paths.
 - Request and response schemas.
 - Example payloads.
 - Error codes.
 - Auth notes.
-- Integration contracts for AI agents and frontend.
+- Frontend/backend data contracts.
 
-## Initial APIs To Define
+## Current API Scope
 
-- Fetch demo items.
-- Fetch reviews/evidence sources for selected items.
-- Submit AI task request.
-- Fetch AI-generated evidence or comparison result.
-- Save interaction log.
-- Save final study decision.
+Current API docs should focus on:
+
+- page rendering data
+- detail view data
+- search/filter data
+- study interaction logging
+- DB schema and indexes needed by those APIs
+
+AI-agent-specific APIs are intentionally not defined here yet. Add them after AI request/display contracts are stable.
+
+## API Docs
+
+- `netflix-demo-api.md`: Netflix demo schema and endpoint specification.
 
 ## Rule
 
