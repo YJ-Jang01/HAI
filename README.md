@@ -83,7 +83,8 @@ Open `http://localhost:8001`.
 
 - `main`: stable deployment/demo branch.
 - `dev`: integration branch for active development.
-- role branches: branch from `dev`, then merge back into `dev`.
+- fixed role branches: `frontend`, `backend`, `ai-nl`, `ai-display`.
+- each role branch merges into `dev`.
 
 See `docs/BRANCHING.md`.
 
