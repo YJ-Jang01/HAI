@@ -46,6 +46,62 @@ Open:
 
 `DATABASE_URL` is required because the backend targets Supabase Postgres directly.
 
+## Current Supabase Status
+
+The current local backend has been verified against the Supabase project configured in `backend/.env`.
+
+Verified commands:
+
+```powershell
+npm run db:migrate
+npm run db:seed:netflix
+npm run dev
+```
+
+Verified results:
+
+- `drizzle/0000_initial.sql` was applied successfully.
+- Netflix seed import completed with 30 media items, 3 tags, and 5 shelves.
+- `GET /health` returned `{ "ok": true }`.
+- `GET /api/demos/netflix/home` returned Supabase-backed Netflix home data.
+
+Do not commit `backend/.env`. It contains the Supabase Postgres connection string and DB password.
+
+If the direct Supabase host `db.<project-ref>.supabase.co` fails from a local network, use the Supabase Session Pooler URI instead. Direct connection can require IPv6 network support.
+
+## Frontend Integration Info
+
+Frontend only needs the backend base URL, not Supabase credentials.
+
+Local backend base URL:
+
+```text
+http://127.0.0.1:8002
+```
+
+Netflix frontend env:
+
+```text
+VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002
+```
+
+Primary endpoints:
+
+```text
+GET  /api/demos/netflix/home
+GET  /api/demos/netflix/shelves
+GET  /api/demos/netflix/items?query=&tag=&limit=&offset=
+GET  /api/demos/netflix/items/:itemId
+POST /api/logs
+```
+
+Never share these with frontend code:
+
+- `DATABASE_URL`
+- DB password
+- Supabase service-role key
+- Supabase project password
+
 ## Node App Layout
 
 - `src/app.ts`: Express app, CORS, JSON middleware, route mounting, and error handling.
