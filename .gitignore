@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+
+node_modules/
+dist/
+.vite/
+coverage/
+
+*.log
+*.sqlite3
+__pycache__/
