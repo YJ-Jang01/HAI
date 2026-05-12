@@ -30,6 +30,13 @@ AI-agent-specific APIs are intentionally not defined here yet. Add them after AI
 
 - `netflix-demo-api.md`: Netflix demo schema and endpoint specification.
 
+## Current Implementation
+
+- Node.js/Express routes live in `backend/src/routes/`.
+- Drizzle schema lives in `backend/src/db/schema.ts`.
+- `npm run db:migrate` applies `backend/drizzle/0000_initial.sql` to Supabase Postgres.
+- `npm run db:seed:netflix` imports `frontend/Netflix/data.json`.
+
 ## Rule
 
 Every endpoint used by frontend or AI code should have one documented example request and one documented example response.
