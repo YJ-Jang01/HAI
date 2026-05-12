@@ -8,7 +8,9 @@ const SHELVES = [
   { key: "my_list", title: "My List" },
 ];
 
-export const API_BASE_URL = import.meta.env.VITE_NETFLIX_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === "true";
+
+export const API_BASE_URL = (import.meta.env.VITE_NETFLIX_API_BASE_URL || "http://127.0.0.1:8002").replace(/\/$/, "");
 
 function getAsset(item, type) {
   return item.assets?.find((asset) => asset.type === type)?.url ?? "";
@@ -91,7 +93,7 @@ export function fromApiHome(home) {
 }
 
 export async function fetchHome() {
-  if (!API_BASE_URL) {
+  if (USE_MOCK_DATA) {
     return buildMockHome();
   }
 
@@ -104,7 +106,7 @@ export async function fetchHome() {
 }
 
 export async function fetchItemDetail(item) {
-  if (!API_BASE_URL || item.episodes.length > 0) {
+  if (USE_MOCK_DATA || item.episodes.length > 0) {
     return item;
   }
 

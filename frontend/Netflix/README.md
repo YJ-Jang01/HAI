@@ -9,7 +9,7 @@ This directory contains the secondary media-grid demo implemented as a React/Vit
 - `src/dataAdapter.js`: converts local mock data or backend API data into the view model.
 - `src/styles.css`: Tailwind CSS entry file.
 - `vite.config.js`: Vite config with React and Tailwind plugins.
-- `data.json`: app-local content metadata used when no API base URL is configured.
+- `data.json`: app-local content metadata used only when `VITE_USE_MOCK_DATA=true`.
 - `.env.example`: optional backend API base URL config.
 
 ## Current Role
@@ -30,8 +30,11 @@ npm run dev
 
 Open `http://127.0.0.1:8001`.
 
-By default the app uses local `data.json`. To use the backend API, create `.env` from `.env.example` and set:
+By default the app calls the backend API at `http://127.0.0.1:8002`. Create `.env` from `.env.example` when the backend URL changes:
 
 ```text
 VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002
+VITE_USE_MOCK_DATA=false
 ```
+
+To run without backend, set `VITE_USE_MOCK_DATA=true`.

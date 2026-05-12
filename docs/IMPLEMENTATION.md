@@ -74,7 +74,8 @@ Already implemented:
 - hero section
 - expand modal with video
 - simple tag/name search
-- optional backend API integration through `VITE_NETFLIX_API_BASE_URL`
+- backend API integration by default through `VITE_NETFLIX_API_BASE_URL`
+- local mock fallback only when `VITE_USE_MOCK_DATA=true`
 
 ## Role-Based Implementation Order
 
