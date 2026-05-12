@@ -61,10 +61,12 @@ Secondary media demo.
 
 Current files:
 
-- `index.html`
-- `style.css`
-- `script.js`
+- `index.html`: Vite HTML entry.
+- `src/App.jsx`: React UI, interaction state, and Tailwind utility styling.
+- `src/dataAdapter.js`: local mock/backend API data adapter.
+- `src/styles.css`: Tailwind CSS entry file.
 - `data.json`
+- `package.json`
 
 Already implemented:
 
@@ -72,6 +74,8 @@ Already implemented:
 - hero section
 - expand modal with video
 - simple tag/name search
+- backend API integration by default through `VITE_NETFLIX_API_BASE_URL`
+- local mock fallback only when `VITE_USE_MOCK_DATA=true`
 
 ## Role-Based Implementation Order
 

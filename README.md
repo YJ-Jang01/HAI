@@ -61,7 +61,7 @@ Do not add new top-level folders unless the project genuinely needs them.
 
 ## Running A Demo
 
-The demos fetch local JSON files, so serve each folder with a local web server.
+Amazon is still a static prototype, so serve the folder with a local web server.
 
 ```powershell
 cd frontend/Amazon
@@ -70,14 +70,15 @@ python -m http.server 8000
 
 Open `http://localhost:8000`.
 
-For the media demo:
+Netflix is a React/Vite app:
 
 ```powershell
 cd frontend/Netflix
-python -m http.server 8001
+npm install
+npm run dev
 ```
 
-Open `http://localhost:8001`.
+Open `http://127.0.0.1:8001`.
 
 ## Branch Workflow
 
