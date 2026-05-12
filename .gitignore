@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+
+node_modules/
+dist/
+coverage/
+
+*.log
+*.sqlite3
+__pycache__/
