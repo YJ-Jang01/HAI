@@ -46,6 +46,8 @@ Open:
 
 `DATABASE_URL` is required because the backend targets Supabase Postgres directly.
 
+Keep this process running while the Netflix frontend is open. Local runtime logs appear in the terminal running `npm run dev`; deployed runtime logs will come from the Node host. Supabase logs show database-side activity, not the browser-to-backend request URL.
+
 ## Current Supabase Status
 
 The current local backend has been verified against the Supabase project configured in `backend/.env`.
@@ -101,6 +103,13 @@ Never share these with frontend code:
 - DB password
 - Supabase service-role key
 - Supabase project password
+
+Frontend verification:
+
+1. Start this backend on port `8002`.
+2. Start `frontend/Netflix`.
+3. Open browser DevTools Network tab.
+4. Confirm the frontend requests `http://127.0.0.1:8002/api/demos/netflix/home`.
 
 ## Node App Layout
 

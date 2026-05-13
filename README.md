@@ -70,7 +70,28 @@ python -m http.server 8000
 
 Open `http://localhost:8000`.
 
-Netflix is a React/Vite app:
+Netflix is a React/Vite app that calls the backend API by default. Run the backend first if you want to use Supabase-backed data.
+
+Backend:
+
+```powershell
+cd backend
+npm install
+Copy-Item .env.example .env
+# Fill DATABASE_URL in .env before running migrations.
+npm run db:migrate
+npm run db:seed:netflix
+npm run dev
+```
+
+Verify the backend:
+
+```text
+http://127.0.0.1:8002/health
+http://127.0.0.1:8002/api/demos/netflix/home
+```
+
+Netflix frontend:
 
 ```powershell
 cd frontend/Netflix
@@ -79,6 +100,8 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:8001`.
+
+The frontend uses `VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002` by default. To run Netflix without the backend, create `frontend/Netflix/.env` and set `VITE_USE_MOCK_DATA=true`.
 
 ## Branch Workflow
 

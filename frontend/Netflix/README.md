@@ -18,9 +18,19 @@ This prototype is useful for earlier project ideas around natural-language GUI c
 
 ## Local Running Notes
 
-Install dependencies and run the Vite dev server.
+The integrated Netflix flow expects the backend API to be running first. Run these commands from the repository root.
 
-Example:
+Backend:
+
+```powershell
+cd backend
+npm install
+npm run db:migrate
+npm run db:seed:netflix
+npm run dev
+```
+
+Frontend, in a second terminal:
 
 ```powershell
 cd frontend/Netflix
@@ -38,3 +48,9 @@ VITE_USE_MOCK_DATA=false
 ```
 
 To run without backend, set `VITE_USE_MOCK_DATA=true`.
+
+To verify the app is using the backend, open browser DevTools Network tab and confirm a request to:
+
+```text
+http://127.0.0.1:8002/api/demos/netflix/home
+```

@@ -20,6 +20,19 @@
 
 See `docs/ROLES.md` for ownership and deliverables.
 
+## Current Integration Status
+
+- `dev` contains the latest `backend` and `frontend` branch work.
+- `backend/` provides the Node.js API and Supabase Postgres schema/seed flow.
+- `frontend/Netflix/` is a React/Vite/Tailwind app and uses the backend API by default.
+- Netflix can still run from local mock data only when `VITE_USE_MOCK_DATA=true`.
+
+Run order for the integrated Netflix demo:
+
+1. Start `backend/` on `http://127.0.0.1:8002`.
+2. Start `frontend/Netflix/` on `http://127.0.0.1:8001`.
+3. Verify `GET /api/demos/netflix/home` in the browser Network tab.
+
 ## Current Apps
 
 ### `frontend/Amazon/`

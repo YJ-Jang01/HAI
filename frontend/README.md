@@ -66,7 +66,19 @@ python -m http.server 8000
 
 Open `http://localhost:8000`.
 
-Netflix is a React/Vite app:
+Netflix is a React/Vite app. By default it calls the backend API, so start `backend/` first when testing the integrated flow.
+
+Backend:
+
+```powershell
+cd backend
+npm install
+npm run db:migrate
+npm run db:seed:netflix
+npm run dev
+```
+
+Netflix frontend:
 
 ```powershell
 cd frontend/Netflix
@@ -75,3 +87,10 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:8001`.
+
+Use `frontend/Netflix/.env` only when overriding the backend URL or forcing mock data:
+
+```text
+VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002
+VITE_USE_MOCK_DATA=false
+```
