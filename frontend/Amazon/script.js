@@ -71,23 +71,6 @@ function mapColorToCss(colorName) {
     return '#ccc';
 }
 
-/*
-const filterConfig = {
-    "Electronics": [
-        { label: "Storage", key: "storage" },
-        { label: "Brand", key: "brand" }
-    ],
-    "Clothing": [
-        { label: "Size", key: "size" },
-        { label: "Material", key: "material" }
-    ],
-    "Home": [
-        { label: "Room", key: "room" },
-        { label: "Style", key: "style" }
-    ]
-};
-*/
-
 async function init() {
     try {
         const [prodRes, reviewRes] = await Promise.all([
@@ -282,13 +265,14 @@ function showCategory(category) {
     window.scrollTo(0, 0);
 }
 
+// 필터 내 가격 슬라이더
 function handlePriceSlider(value) {
     currentFilters.maxPrice = parseFloat(value);
     document.getElementById('max-price-label').innerText = `Up to $${value}`;
     applyFilters();
 }
 
-// 중복된 applyFilters 함수들을 모두 지우고 이 코드로 하나만 넣으세요!
+// 필터 적용
 function applyFilters() {
     const listContainer = document.getElementById('product-list');
     const countLabel = document.getElementById('current-category-count');
@@ -298,7 +282,6 @@ function applyFilters() {
         const matchCategory = p.category === currentFilters.mainCategory;
         const matchSub = currentFilters.subCategory === 'All' || p.subCategory === currentFilters.subCategory;
         
-        // ✨ 핵심 원인 해결: 달러($)나 쉼표가 섞인 문자열이라도 숫자로 정상 변환
         const priceNum = typeof p.price === 'string' ? parseFloat(p.price.replace(/[^0-9.]/g, '')) : parseFloat(p.price);
         const matchPrice = priceNum <= currentFilters.maxPrice;
         
@@ -316,7 +299,6 @@ function applyFilters() {
     if (filtered.length === 0) {
         listContainer.innerHTML = `<p style="padding: 20px;">No results match your filters.</p>`;
     } else {
-        // [object Object] 대신 HTML 요소로 직접 매핑해서 출력
         listContainer.innerHTML = filtered.map(p => `
             <div class="product-card" onclick="openDetail(${p.id})">
                 <img src="${p.img}" alt="${p.name}">
@@ -434,7 +416,7 @@ function renderCategoryProducts(category) {
     const products = allProducts.filter(p => p.category === category);
     const subtotal = cart && cart.length > 0 ? cart.reduce((sum, item) => sum + (item.price * 1300), 0) : 0;
 
-    // 3. HTML 렌더링 (오타 수정 완료)
+    // 3. HTML 렌더링
     productView.innerHTML = `
         <div style="display: grid; grid-template-columns: 1fr 300px; gap: 20px; max-width: 1500px; margin: 0 auto; padding: 20px; align-items: start;">
             
@@ -811,6 +793,7 @@ function addToCart(p) {
     return true;
 }
 
+// 사이드바에 카트 내 내용물 출력
 function renderSidebarCart() {
     const sideCartView = document.getElementById('side-cart-view');
     if (cart.length > 0) {
@@ -845,7 +828,6 @@ function renderSidebarCart() {
         sideCartView.classList.add('hidden');
     }
 }
-
 
 // 사이드바 전용 개별 삭제 기능
 function removeFromSidebar(index) {
