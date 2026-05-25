@@ -1,6 +1,6 @@
 # Supabase
 
-This directory is for Supabase setup notes and optional Supabase-native files. The current source of truth for the database schema is `backend/drizzle/0000_initial.sql` plus the matching Drizzle schema in `backend/src/db/schema.ts`.
+This directory is for Supabase setup notes and optional Supabase-native files. The current source of truth for the database schema is `backend/drizzle/` plus the matching Drizzle schema in `backend/src/db/schema.ts`.
 
 ## What Belongs Here
 
@@ -17,6 +17,7 @@ Use Supabase as managed Postgres and Node.js as the API layer.
 - Frontend calls Node.js endpoints.
 - Node.js connects to Supabase Postgres with `DATABASE_URL`.
 - `npm run db:migrate` creates tables, constraints, and indexes.
+- `npm run db:seed:amazon` uploads `frontend/Amazon/products.json` and `frontend/Amazon/review.json` into Supabase.
 - `npm run db:seed:netflix` uploads `frontend/Netflix/data.json` into Supabase.
 
 Do not put Supabase service-role keys in frontend code. The browser should not connect directly to the database for this project structure.
@@ -60,15 +61,53 @@ The import command maps the current frontend mock data like this:
 
 The existing Netflix rows are split into five shelves with six items each to match the current demo page layout.
 
+## Upload Amazon Frontend Data
+
+Run from `backend/`:
+
+```powershell
+npm install
+npm run db:migrate
+npm run db:seed:amazon
+```
+
+The import command maps the current frontend mock data like this:
+
+| Frontend JSON | Database |
+| --- | --- |
+| `category` | `product_categories` |
+| `subCategory` | `product_subcategories` |
+| `id` | `products.external_id` |
+| `name`, `keyword`, `desc`, `brandStory` | `products` |
+| `price`, `rating`, `reviewCount` | typed numeric/integer columns on `products` |
+| `img`, `descImages[]`, `brandImages[]` | `product_assets` |
+| `features[]` | `product_features` |
+| `sizes[]`, `colors[]` | `product_option_groups`, `product_option_values` |
+| `ratingDetail` | `product_rating_breakdown` |
+| `review.json` rows | `product_reviews` |
+
 ## Normalization Rule
 
-Use 4NF for core catalog data. Do not store independent multi-valued facts as arrays or repeated columns. For example, media tags, media assets, shelf membership, and episodes should be separate relations.
+Use 4NF for core catalog data. Do not store independent multi-valued facts as arrays or repeated columns. For example, product assets, features, options, rating buckets, reviews, media tags, shelf membership, and episodes should be separate relations.
 
 API responses may be nested JSON for frontend convenience, but database tables should remain normalized.
 
 Netflix schema details are documented in:
 
+- `backend/api-docs/amazon-demo-api.md`
 - `backend/api-docs/netflix-demo-api.md`
+
+## Current Amazon Tables
+
+- `product_categories`
+- `product_subcategories`
+- `products`
+- `product_assets`
+- `product_features`
+- `product_option_groups`
+- `product_option_values`
+- `product_rating_breakdown`
+- `product_reviews`
 
 ## Current Netflix Tables
 
@@ -90,6 +129,7 @@ Add indexes for lookup, join, filtering, and ordering paths used by the APIs.
 
 Netflix demo indexes are documented in:
 
+- `backend/api-docs/amazon-demo-api.md`
 - `backend/api-docs/netflix-demo-api.md`
 
 ## Rule

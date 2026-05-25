@@ -10,7 +10,9 @@
     "check": "tsc --noEmit",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed:netflix": "tsx src/scripts/seed-netflix.ts",
-    "db:setup:netflix": "npm run db:migrate && npm run db:seed:netflix"
+    "db:seed:amazon": "tsx src/scripts/seed-amazon.ts",
+    "db:setup:netflix": "npm run db:migrate && npm run db:seed:netflix",
+    "db:setup:amazon": "npm run db:migrate && npm run db:seed:amazon"
   },
   "dependencies": {
     "cors": "^2.8.5",

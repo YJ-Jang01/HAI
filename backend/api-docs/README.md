@@ -28,14 +28,16 @@ AI-agent-specific APIs are intentionally not defined here yet. Add them after AI
 
 ## API Docs
 
+- `amazon-demo-api.md`: Amazon shopping demo schema and endpoint specification.
 - `netflix-demo-api.md`: Netflix demo schema and endpoint specification.
 
 ## Current Implementation
 
 - Node.js/Express routes live in `backend/src/routes/`.
 - Drizzle schema lives in `backend/src/db/schema.ts`.
-- `npm run db:migrate` applies `backend/drizzle/0000_initial.sql` to Supabase Postgres.
+- `npm run db:migrate` applies all SQL files in `backend/drizzle/` to Supabase Postgres.
 - `npm run db:seed:netflix` imports `frontend/Netflix/data.json`.
+- `npm run db:seed:amazon` imports `frontend/Amazon/products.json` and `frontend/Amazon/review.json`.
 
 ## Rule
 

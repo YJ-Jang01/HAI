@@ -58,6 +58,7 @@ npm install
 npm run check
 npm run db:migrate
 npm run db:seed:netflix
+npm run db:seed:amazon
 ```
 
 Then verify:
@@ -77,7 +78,8 @@ npm install
 npm run build
 npm run db:migrate
 npm run db:seed:netflix
+npm run db:seed:amazon
 npm start
 ```
 
-Run the seed command only when seed data should be refreshed. During an actual study, avoid reseeding unless logs and catalog state have already been backed up and the team agrees to reset demo data.
+Run seed commands only when seed data should be refreshed. `db:seed:amazon` clears and reloads the Amazon catalog for the `amazon` demo site, so during an actual study, avoid reseeding unless logs and catalog state have already been backed up and the team agrees to reset demo data.

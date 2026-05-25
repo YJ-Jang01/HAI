@@ -36,6 +36,7 @@ Copy-Item .env.example .env
 # Set DATABASE_URL in .env first.
 npm run db:migrate
 npm run db:seed:netflix
+npm run db:seed:amazon
 npm run dev
 ```
 
@@ -43,6 +44,8 @@ Open:
 
 - `http://127.0.0.1:8002/api/demos/netflix/home`
 - `http://127.0.0.1:8002/api/demos/netflix/items?tag=action`
+- `http://127.0.0.1:8002/api/demos/amazon/home`
+- `http://127.0.0.1:8002/api/demos/amazon/products?limit=5`
 
 `DATABASE_URL` is required because the backend targets Supabase Postgres directly.
 
@@ -57,15 +60,19 @@ Verified commands:
 ```powershell
 npm run db:migrate
 npm run db:seed:netflix
+npm run db:seed:amazon
 npm run dev
 ```
 
 Verified results:
 
 - `drizzle/0000_initial.sql` was applied successfully.
+- `drizzle/0001_amazon_catalog.sql` was applied successfully.
 - Netflix seed import completed with 30 media items, 3 tags, and 5 shelves.
+- Amazon seed import completed with 70 products, 7 categories, 30 subcategories, and 149 reviews.
 - `GET /health` returned `{ "ok": true }`.
 - `GET /api/demos/netflix/home` returned Supabase-backed Netflix home data.
+- `GET /api/demos/amazon/home` returned Supabase-backed Amazon category data.
 
 Do not commit `backend/.env`. It contains the Supabase Postgres connection string and DB password.
 
@@ -94,6 +101,10 @@ GET  /api/demos/netflix/home
 GET  /api/demos/netflix/shelves
 GET  /api/demos/netflix/items?query=&tag=&limit=&offset=
 GET  /api/demos/netflix/items/:itemId
+GET  /api/demos/amazon/home
+GET  /api/demos/amazon/categories
+GET  /api/demos/amazon/products?query=&category=&subCategory=&limit=&cursor=
+GET  /api/demos/amazon/products/:productId
 POST /api/logs
 ```
 
@@ -119,9 +130,11 @@ Frontend verification:
 - `src/db/client.ts`: Supabase Postgres connection through `pg`.
 - `src/routes/`: HTTP routes documented in `api-docs/netflix-demo-api.md`.
 - `src/repositories/`: query and serialization logic.
-- `src/scripts/migrate.ts`: applies `drizzle/0000_initial.sql`.
+- `src/scripts/migrate.ts`: applies all SQL files in `drizzle/` in filename order.
 - `src/scripts/seed-netflix.ts`: imports `frontend/Netflix/data.json` into normalized tables.
+- `src/scripts/seed-amazon.ts`: imports `frontend/Amazon/products.json` and `frontend/Amazon/review.json` into normalized tables.
 - `drizzle/0000_initial.sql`: reproducible SQL schema migration.
+- `drizzle/0001_amazon_catalog.sql`: Amazon product catalog and review schema migration.
 
 ## `supabase/`
 
@@ -154,6 +167,7 @@ Put backend API documents here:
 
 Current API document:
 
+- `api-docs/amazon-demo-api.md`: Amazon page-data API, normalized catalog/review schema, Mermaid ER diagram, recommended indexes, response models, and error model.
 - `api-docs/netflix-demo-api.md`: Netflix page-data API, 4NF schema, Mermaid ER diagram, recommended indexes, response models, and error model.
 
 ## `deployment/`
@@ -171,6 +185,13 @@ Put deployment instructions here:
 Initial schema covers:
 
 - demo sites
+- shopping product categories
+- shopping products
+- product assets
+- product features
+- product options
+- product rating breakdowns
+- product reviews
 - media items
 - media tags
 - media assets

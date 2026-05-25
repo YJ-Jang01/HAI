@@ -1,8 +1,10 @@
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -204,5 +206,181 @@ export const interactionLogs = pgTable(
   (table) => [
     index("idx_interaction_logs_session_time").on(table.sessionId, table.createdAt),
     index("idx_interaction_logs_demo_time").on(table.demoSiteId, table.createdAt),
+  ],
+);
+
+export const productCategories = pgTable(
+  "product_categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    demoSiteId: uuid("demo_site_id")
+      .notNull()
+      .references(() => demoSites.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex("uq_product_categories_demo_slug").on(table.demoSiteId, table.slug),
+    index("idx_product_categories_demo_order").on(table.demoSiteId, table.sortOrder),
+  ],
+);
+
+export const productSubcategories = pgTable(
+  "product_subcategories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => productCategories.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex("uq_product_subcategories_category_slug").on(table.categoryId, table.slug),
+    index("idx_product_subcategories_category_order").on(table.categoryId, table.sortOrder),
+  ],
+);
+
+export const products = pgTable(
+  "products",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    demoSiteId: uuid("demo_site_id")
+      .notNull()
+      .references(() => demoSites.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => productCategories.id, { onDelete: "restrict" }),
+    subcategoryId: uuid("subcategory_id")
+      .notNull()
+      .references(() => productSubcategories.id, { onDelete: "restrict" }),
+    externalId: integer("external_id").notNull(),
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    keyword: text("keyword"),
+    description: text("description").notNull(),
+    brandStory: text("brand_story"),
+    priceAmount: numeric("price_amount", { precision: 12, scale: 2 }).notNull(),
+    currencyCode: text("currency_code").notNull().default("USD"),
+    rating: numeric("rating", { precision: 2, scale: 1 }).notNull(),
+    reviewCount: integer("review_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_products_demo_external_id").on(table.demoSiteId, table.externalId),
+    uniqueIndex("uq_products_demo_slug").on(table.demoSiteId, table.slug),
+    index("idx_products_demo_external_id").on(table.demoSiteId, table.externalId),
+    index("idx_products_demo_category_external").on(table.demoSiteId, table.categoryId, table.externalId),
+    index("idx_products_demo_subcategory_external").on(table.demoSiteId, table.subcategoryId, table.externalId),
+    index("idx_products_category").on(table.categoryId),
+    index("idx_products_subcategory").on(table.subcategoryId),
+  ],
+);
+
+export const productAssets = pgTable(
+  "product_assets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    assetType: text("asset_type").notNull(),
+    url: text("url").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    altText: text("alt_text"),
+  },
+  (table) => [
+    uniqueIndex("uq_product_assets_product_type_order").on(table.productId, table.assetType, table.sortOrder),
+    index("idx_product_assets_product_type_order").on(table.productId, table.assetType, table.sortOrder),
+  ],
+);
+
+export const productFeatures = pgTable(
+  "product_features",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    featureText: text("feature_text").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex("uq_product_features_product_order").on(table.productId, table.sortOrder),
+    index("idx_product_features_product_order").on(table.productId, table.sortOrder),
+  ],
+);
+
+export const productOptionGroups = pgTable(
+  "product_option_groups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex("uq_product_option_groups_product_name").on(table.productId, table.name),
+    uniqueIndex("uq_product_option_groups_product_order").on(table.productId, table.sortOrder),
+    index("idx_product_option_groups_product_order").on(table.productId, table.sortOrder),
+  ],
+);
+
+export const productOptionValues = pgTable(
+  "product_option_values",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    optionGroupId: uuid("option_group_id")
+      .notNull()
+      .references(() => productOptionGroups.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex("uq_product_option_values_group_value").on(table.optionGroupId, table.value),
+    uniqueIndex("uq_product_option_values_group_order").on(table.optionGroupId, table.sortOrder),
+    index("idx_product_option_values_group_order").on(table.optionGroupId, table.sortOrder),
+  ],
+);
+
+export const productRatingBreakdown = pgTable(
+  "product_rating_breakdown",
+  {
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    ratingValue: integer("rating_value").notNull(),
+    percentage: integer("percentage").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.productId, table.ratingValue] }),
+    index("idx_product_rating_breakdown_product").on(table.productId),
+  ],
+);
+
+export const productReviews = pgTable(
+  "product_reviews",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    externalId: integer("external_id").notNull(),
+    userName: text("user_name").notNull(),
+    rating: integer("rating").notNull(),
+    reviewDate: date("review_date").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_product_reviews_product_external_id").on(table.productId, table.externalId),
+    index("idx_product_reviews_product_date").on(table.productId, table.reviewDate),
+    index("idx_product_reviews_product_rating").on(table.productId, table.rating),
   ],
 );

@@ -59,6 +59,7 @@ Already implemented:
 - AI-style summary area in detail modal
 - cart count/toast
 - React/Vite/Tailwind frontend implementation
+- backend Amazon schema, migration, seed import, and page-data API
 
 Missing for GroundedCompare:
 
@@ -107,10 +108,10 @@ Already implemented:
 
 ### Backend
 
-1. Design Supabase schema.
-2. Create migrations and seed data.
-3. Document item/review/evidence/logging APIs.
-4. Implement API or Supabase access pattern.
+1. Extend Supabase schema/API as frontend and AI contracts evolve.
+2. Keep migrations and seed data reproducible.
+3. Maintain Amazon and Netflix API docs.
+4. Add item/review/evidence logging APIs when AI contracts are finalized.
 5. Document deployment in `backend/deployment/`.
 6. Deploy backend or document local setup.
 
@@ -136,12 +137,13 @@ Keep current data app-local:
 - `frontend/Amazon/review.json`
 - `frontend/Netflix/data.json`
 
-Before study use, normalize:
+Amazon product/review data is now imported into Supabase by `npm run db:seed:amazon`. Before study use, check:
 
-- product `price` as number
-- product `reviewCount` as number
+- product `price` parses as number
+- product `reviewCount` parses as number
 - stable review IDs
-- review topic tags such as battery, durability, comfort, sound, price, shipping
+- review content matches the current products
+- review topic tags such as comfort, fit, material, durability, price, shipping after AI evidence requirements are finalized
 
 ## Logging Events Needed
 
