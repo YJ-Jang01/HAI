@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,12 +7,16 @@ import { pool } from "../db/client.js";
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const backendRoot = resolve(currentDir, "../..");
-const migrationPath = resolve(backendRoot, "drizzle/0000_initial.sql");
+const migrationsDir = resolve(backendRoot, "drizzle");
 
 async function main() {
-  const sql = await readFile(migrationPath, "utf-8");
-  await pool.query(sql);
-  console.log("Applied migration drizzle/0000_initial.sql");
+  const files = (await readdir(migrationsDir)).filter((file) => file.endsWith(".sql")).sort();
+
+  for (const file of files) {
+    const sql = await readFile(resolve(migrationsDir, file), "utf-8");
+    await pool.query(sql);
+    console.log(`Applied migration drizzle/${file}`);
+  }
 }
 
 main()

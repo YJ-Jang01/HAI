@@ -81,6 +81,7 @@ npm install
 Copy-Item .env.example .env
 # Fill DATABASE_URL in .env before running migrations.
 npm run db:migrate
+npm run db:seed:amazon
 npm run db:seed:netflix
 npm run dev
 ```
@@ -89,6 +90,7 @@ Verify the backend:
 
 ```text
 http://127.0.0.1:8002/health
+http://127.0.0.1:8002/api/demos/amazon/home
 http://127.0.0.1:8002/api/demos/netflix/home
 ```
 
@@ -117,6 +119,7 @@ See `docs/BRANCHING.md`.
 
 Current backend API documentation is focused on page data, schema design, and study logging.
 
+- `backend/api-docs/amazon-demo-api.md`: Amazon demo schema, Mermaid ER diagram, indexes, response models, and endpoint specs.
 - `backend/api-docs/netflix-demo-api.md`: Netflix demo schema, Mermaid ER diagram, indexes, response models, and endpoint specs.
 - `backend/supabase/README.md`: Supabase schema/migration workspace notes.
 

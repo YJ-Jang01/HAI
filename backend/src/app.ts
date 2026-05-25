@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 
 import { sendError } from "./lib/http.js";
+import { amazonRouter } from "./routes/amazon.js";
 import { logsRouter } from "./routes/logs.js";
 import { netflixRouter } from "./routes/netflix.js";
 
@@ -31,6 +32,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/demos/netflix", netflixRouter);
+app.use("/api/demos/amazon", amazonRouter);
 app.use("/api/logs", logsRouter);
 
 app.use((_req, res) => {

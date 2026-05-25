@@ -15,6 +15,7 @@ This directory keeps only the active project docs needed for development.
 
 - Root `README.md`: shortest full-project run guide.
 - `backend/README.md`: Supabase-backed Node API setup and frontend integration info.
+- `backend/api-docs/amazon-demo-api.md`: Amazon schema and API contract.
 - `frontend/README.md`: demo-specific frontend run notes.
 - `frontend/Netflix/README.md`: Netflix React/Vite backend API and mock-data switch.
 
