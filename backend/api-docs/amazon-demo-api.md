@@ -268,6 +268,15 @@ on product_assets (product_id, asset_type, sort_order);
 
 create index idx_product_reviews_product_date
 on product_reviews (product_id, review_date);
+
+create index idx_products_demo_price_external
+on products (demo_site_id, price_amount, external_id);
+
+create index idx_products_demo_rating_external
+on products (demo_site_id, rating desc, external_id);
+
+create index idx_products_demo_review_count_external
+on products (demo_site_id, review_count desc, external_id);
 ```
 
 These indexes target the current frontend paths:
@@ -275,6 +284,7 @@ These indexes target the current frontend paths:
 - category home rendering
 - category/subcategory filtering
 - cursor pagination by `external_id`
+- AI range filtering by price, rating, and review count
 - product detail asset/feature/option/review loading
 - future AI retrieval by stable product/review references
 
@@ -407,10 +417,10 @@ GET /api/demos/amazon/categories
 
 ## `GET /api/demos/amazon/products`
 
-Returns product summaries for search and category/subcategory listing pages. This endpoint uses cursor pagination with `external_id`.
+Returns product summaries for search, category/subcategory listing pages, and AI-generated range filters. The default sort uses cursor pagination with `external_id`.
 
 ```text
-GET /api/demos/amazon/products?query=coat&category=outerwear&subCategory=coats&limit=24&cursor=24
+GET /api/demos/amazon/products?query=coat&category=outerwear&subCategory=coats&priceMax=120&ratingMin=4.3&reviewCountMin=50&sort=rating_desc&limit=24
 ```
 
 Query parameters:
@@ -420,8 +430,21 @@ Query parameters:
 | `query` | text | no | Case-insensitive search over `name`, `keyword`, and `description`. |
 | `category` | text | no | Category slug. |
 | `subCategory` | text | no | Subcategory slug. |
+| `priceMin` | number | no | Minimum product price. Must be `>= 0`. |
+| `priceMax` | number | no | Maximum product price. Must be `>= 0`. |
+| `ratingMin` | number | no | Minimum average product rating. Must be between `0` and `5`. |
+| `ratingMax` | number | no | Maximum average product rating. Must be between `0` and `5`. |
+| `reviewCountMin` | integer | no | Minimum denormalized product review count. Must be `>= 0`. |
+| `reviewCountMax` | integer | no | Maximum denormalized product review count. Must be `>= 0`. |
+| `sort` | enum | no | One of `external_id_asc`, `price_asc`, `price_desc`, `rating_desc`, `review_count_desc`. Default `external_id_asc`. |
 | `limit` | integer | no | Max products to return. Default `24`, max `100`. |
-| `cursor` | integer | no | Last seen `externalId`; next page returns products after this value. |
+| `cursor` | integer | no | Last seen `externalId`; next page returns products after this value. Currently supported only with `sort=external_id_asc`. |
+
+AI use:
+
+- Use this endpoint after the NL request agent resolves a user phrase into explicit filters.
+- Range-like phrases must be converted into numeric parameters before this endpoint is called.
+- Example: `not too expensive` may become `priceMax=120`; `good reviews` may become `ratingMin=4.3&reviewCountMin=50`.
 
 Example response:
 
@@ -429,13 +452,97 @@ Example response:
 {
   "demo": "amazon",
   "items": [],
+  "sort": "rating_desc",
   "pagination": {
     "limit": 24,
-    "nextCursor": 24,
+    "nextCursor": null,
     "total": 70
   }
 }
 ```
+
+## `GET /api/demos/amazon/products/facets`
+
+Returns numeric range summaries for the current candidate set. Use this before applying subjective range phrases so the AI can make objective, data-grounded interpretations.
+
+```text
+GET /api/demos/amazon/products/facets?query=coat&category=outerwear
+```
+
+Supported query parameters:
+
+| Name | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query` | text | no | Same search query used by the products endpoint. |
+| `category` | text | no | Category slug. |
+| `subCategory` | text | no | Subcategory slug. |
+| `priceMin` | number | no | Optional minimum price if the current candidate set is already narrowed. |
+| `priceMax` | number | no | Optional maximum price if the current candidate set is already narrowed. |
+| `ratingMin` | number | no | Optional minimum rating. |
+| `ratingMax` | number | no | Optional maximum rating. |
+| `reviewCountMin` | integer | no | Optional minimum review count. |
+| `reviewCountMax` | integer | no | Optional maximum review count. |
+
+Example response:
+
+```json
+{
+  "demo": "amazon",
+  "total": 25,
+  "ranges": {
+    "price": {
+      "min": 49.99,
+      "max": 299.99,
+      "average": 126.45,
+      "median": 119.99,
+      "p40": 99.99,
+      "currencyCode": "USD"
+    },
+    "rating": {
+      "min": 3.8,
+      "max": 5,
+      "average": 4.52,
+      "median": 4.5,
+      "p70": 4.7
+    },
+    "reviewCount": {
+      "min": 12,
+      "max": 1240,
+      "average": 212.6,
+      "median": 180,
+      "p70": 350
+    }
+  },
+  "interpretationBasis": {
+    "notTooExpensive": {
+      "field": "price.amount",
+      "operator": "<=",
+      "value": 99.99,
+      "basis": "40th percentile of matched products"
+    },
+    "goodReviews": {
+      "rating": {
+        "field": "rating",
+        "operator": ">=",
+        "value": 4.7,
+        "basis": "70th percentile of matched products"
+      },
+      "reviewCount": {
+        "field": "reviewCount",
+        "operator": ">=",
+        "value": 350,
+        "basis": "70th percentile of matched products"
+      }
+    }
+  }
+}
+```
+
+AI use:
+
+- Use this endpoint to ground range-like natural language in the current product set.
+- The AI display should expose the resolved rule to the user, for example: `not too expensive = price <= 99.99, based on the lower 40% of matching products`.
+- The backend returns numeric summaries only; it does not decide the user's final priority.
 
 ## `GET /api/demos/amazon/products/{productId}`
 
@@ -492,5 +599,7 @@ The current schema supports future AI features without adding AI-specific tables
 
 - Natural-language selection can refer to `products.id`, `externalId`, category slugs, and visible product order.
 - Evidence display can cite `product_reviews.id` and `product_reviews.external_id`.
+- Range-aware AI interpretation should call `GET /products/facets` first, expose the numeric rule to the user, then call `GET /products` with explicit range filters.
+- Range judgments must be grounded in API data such as `price.amount`, `rating`, and `reviewCount`; the AI should not invent thresholds that are not visible in the response contract.
 - Review snippets can later be topic-tagged in a separate table, e.g. `product_review_topics`, after the AI engineer finalizes topic extraction fields.
 - AI-generated summaries should not overwrite `products.description`; store generated outputs separately once the AI display contract is stable.

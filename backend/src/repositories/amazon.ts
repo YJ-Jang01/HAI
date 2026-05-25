@@ -1,4 +1,5 @@
-import { and, asc, count, desc, eq, gt, ilike, inArray, ne, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, ilike, inArray, lte, ne, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { db } from "../db/client.js";
 import {
@@ -15,6 +16,25 @@ import {
 } from "../db/schema.js";
 
 export type ProductRow = typeof products.$inferSelect;
+export type ProductSort = "external_id_asc" | "price_asc" | "price_desc" | "rating_desc" | "review_count_desc";
+
+export type ProductFilterParams = {
+  query?: string;
+  category?: string;
+  subCategory?: string;
+  priceMin?: number;
+  priceMax?: number;
+  ratingMin?: number;
+  ratingMax?: number;
+  reviewCountMin?: number;
+  reviewCountMax?: number;
+};
+
+export type ProductSearchParams = ProductFilterParams & {
+  limit: number;
+  cursor?: number;
+  sort: ProductSort;
+};
 
 function toNumber(value: string | number) {
   return Number(value);
@@ -25,6 +45,23 @@ function serializePrice(product: ProductRow) {
     amount: toNumber(product.priceAmount),
     currencyCode: product.currencyCode,
   };
+}
+
+function nullableNumber(value: string | number | null | undefined) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function roundNullable(value: string | number | null | undefined, digits = 2) {
+  const parsed = nullableNumber(value);
+  if (parsed === null) {
+    return null;
+  }
+  const factor = 10 ** digits;
+  return Math.round(parsed * factor) / factor;
 }
 
 export async function getAmazonSite() {
@@ -184,25 +221,14 @@ async function findSubcategory(siteId: string, slug: string, categoryId?: string
   return row?.subcategory ?? null;
 }
 
-export async function searchProducts(params: {
-  query?: string;
-  category?: string;
-  subCategory?: string;
-  limit: number;
-  cursor?: number;
-}) {
-  const site = await getAmazonSite();
-  if (!site) {
-    return null;
-  }
-
+async function buildProductFilters(site: typeof demoSites.$inferSelect, params: ProductFilterParams) {
   const filters = [eq(products.demoSiteId, site.id)];
   let categoryId: string | undefined;
 
   if (params.category) {
     const category = await findCategory(site.id, params.category);
     if (!category) {
-      return { demo: site.slug, items: [], pagination: { limit: params.limit, nextCursor: null, total: 0 } };
+      return { filters, empty: true };
     }
     categoryId = category.id;
     filters.push(eq(products.categoryId, category.id));
@@ -211,7 +237,7 @@ export async function searchProducts(params: {
   if (params.subCategory) {
     const subcategory = await findSubcategory(site.id, params.subCategory, categoryId);
     if (!subcategory) {
-      return { demo: site.slug, items: [], pagination: { limit: params.limit, nextCursor: null, total: 0 } };
+      return { filters, empty: true };
     }
     filters.push(eq(products.subcategoryId, subcategory.id));
   }
@@ -226,6 +252,55 @@ export async function searchProducts(params: {
     );
   }
 
+  if (params.priceMin !== undefined) {
+    filters.push(gte(products.priceAmount, String(params.priceMin)));
+  }
+  if (params.priceMax !== undefined) {
+    filters.push(lte(products.priceAmount, String(params.priceMax)));
+  }
+  if (params.ratingMin !== undefined) {
+    filters.push(gte(products.rating, String(params.ratingMin)));
+  }
+  if (params.ratingMax !== undefined) {
+    filters.push(lte(products.rating, String(params.ratingMax)));
+  }
+  if (params.reviewCountMin !== undefined) {
+    filters.push(gte(products.reviewCount, params.reviewCountMin));
+  }
+  if (params.reviewCountMax !== undefined) {
+    filters.push(lte(products.reviewCount, params.reviewCountMax));
+  }
+
+  return { filters, empty: false };
+}
+
+function getProductOrder(sort: ProductSort): SQL[] {
+  if (sort === "price_asc") {
+    return [asc(products.priceAmount), asc(products.externalId)];
+  }
+  if (sort === "price_desc") {
+    return [desc(products.priceAmount), asc(products.externalId)];
+  }
+  if (sort === "rating_desc") {
+    return [desc(products.rating), desc(products.reviewCount), asc(products.externalId)];
+  }
+  if (sort === "review_count_desc") {
+    return [desc(products.reviewCount), desc(products.rating), asc(products.externalId)];
+  }
+  return [asc(products.externalId)];
+}
+
+export async function searchProducts(params: ProductSearchParams) {
+  const site = await getAmazonSite();
+  if (!site) {
+    return null;
+  }
+
+  const { filters, empty } = await buildProductFilters(site, params);
+  if (empty) {
+    return { demo: site.slug, items: [], sort: params.sort, pagination: { limit: params.limit, nextCursor: null, total: 0 } };
+  }
+
   const [totalRows] = await db.select({ value: count() }).from(products).where(and(...filters));
   const pageFilters = [...filters];
   if (params.cursor !== undefined) {
@@ -236,16 +311,117 @@ export async function searchProducts(params: {
     .select()
     .from(products)
     .where(and(...pageFilters))
-    .orderBy(asc(products.externalId))
+    .orderBy(...getProductOrder(params.sort))
     .limit(params.limit);
 
   return {
     demo: site.slug,
     items: await Promise.all(rows.map((row) => serializeProductSummary(row))),
+    sort: params.sort,
     pagination: {
       limit: params.limit,
-      nextCursor: rows.length === params.limit ? rows[rows.length - 1]?.externalId ?? null : null,
+      nextCursor: params.sort === "external_id_asc" && rows.length === params.limit ? rows[rows.length - 1]?.externalId ?? null : null,
       total: totalRows?.value ?? 0,
+    },
+  };
+}
+
+export async function getProductFacets(params: ProductFilterParams) {
+  const site = await getAmazonSite();
+  if (!site) {
+    return null;
+  }
+
+  const { filters, empty } = await buildProductFilters(site, params);
+  if (empty) {
+    return {
+      demo: site.slug,
+      total: 0,
+      ranges: {
+        price: null,
+        rating: null,
+        reviewCount: null,
+      },
+      interpretationBasis: {
+        notTooExpensive: null,
+        goodReviews: null,
+      },
+    };
+  }
+
+  const [row] = await db
+    .select({
+      total: count(),
+      minPrice: sql<string | null>`min(${products.priceAmount})`,
+      maxPrice: sql<string | null>`max(${products.priceAmount})`,
+      avgPrice: sql<string | null>`avg(${products.priceAmount})`,
+      medianPrice: sql<string | null>`percentile_cont(0.5) within group (order by ${products.priceAmount})`,
+      p40Price: sql<string | null>`percentile_cont(0.4) within group (order by ${products.priceAmount})`,
+      minRating: sql<string | null>`min(${products.rating})`,
+      maxRating: sql<string | null>`max(${products.rating})`,
+      avgRating: sql<string | null>`avg(${products.rating})`,
+      medianRating: sql<string | null>`percentile_cont(0.5) within group (order by ${products.rating})`,
+      p70Rating: sql<string | null>`percentile_cont(0.7) within group (order by ${products.rating})`,
+      minReviewCount: sql<number | null>`min(${products.reviewCount})`,
+      maxReviewCount: sql<number | null>`max(${products.reviewCount})`,
+      avgReviewCount: sql<string | null>`avg(${products.reviewCount})`,
+      medianReviewCount: sql<string | null>`percentile_cont(0.5) within group (order by ${products.reviewCount})`,
+      p70ReviewCount: sql<string | null>`percentile_cont(0.7) within group (order by ${products.reviewCount})`,
+    })
+    .from(products)
+    .where(and(...filters));
+
+  const total = row?.total ?? 0;
+  const p40Price = roundNullable(row?.p40Price);
+  const p70Rating = roundNullable(row?.p70Rating, 1);
+  const p70ReviewCount = roundNullable(row?.p70ReviewCount, 0);
+
+  return {
+    demo: site.slug,
+    total,
+    ranges: {
+      price:
+        total > 0
+          ? {
+              min: roundNullable(row?.minPrice),
+              max: roundNullable(row?.maxPrice),
+              average: roundNullable(row?.avgPrice),
+              median: roundNullable(row?.medianPrice),
+              p40: p40Price,
+              currencyCode: "USD",
+            }
+          : null,
+      rating:
+        total > 0
+          ? {
+              min: roundNullable(row?.minRating, 1),
+              max: roundNullable(row?.maxRating, 1),
+              average: roundNullable(row?.avgRating, 2),
+              median: roundNullable(row?.medianRating, 1),
+              p70: p70Rating,
+            }
+          : null,
+      reviewCount:
+        total > 0
+          ? {
+              min: nullableNumber(row?.minReviewCount),
+              max: nullableNumber(row?.maxReviewCount),
+              average: roundNullable(row?.avgReviewCount, 1),
+              median: roundNullable(row?.medianReviewCount, 0),
+              p70: p70ReviewCount,
+            }
+          : null,
+    },
+    interpretationBasis: {
+      notTooExpensive: p40Price === null ? null : { field: "price.amount", operator: "<=", value: p40Price, basis: "40th percentile of matched products" },
+      goodReviews:
+        p70Rating === null && p70ReviewCount === null
+          ? null
+          : {
+              rating: p70Rating === null ? null : { field: "rating", operator: ">=", value: p70Rating, basis: "70th percentile of matched products" },
+              reviewCount:
+                p70ReviewCount === null ? null : { field: "reviewCount", operator: ">=", value: p70ReviewCount, basis: "70th percentile of matched products" },
+            },
     },
   };
 }
