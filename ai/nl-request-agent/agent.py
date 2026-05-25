@@ -1,4 +1,9 @@
+import sys
 import os
+# Add the parent directory to the system path so Python can find 'shared'
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'C:\Users\COM\Desktop\HAI Project\HAI\ai\shared')))
+
+from shared.models import DisplayResponse
 from google import genai
 from google.genai import types
 from models import NlIntentRequest
