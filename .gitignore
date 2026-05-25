@@ -10,3 +10,6 @@ coverage/
 *.log
 *.sqlite3
 __pycache__/
+
+venv/
+**/venv/
