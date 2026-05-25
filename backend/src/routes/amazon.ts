@@ -1,9 +1,102 @@
 import { Router } from "express";
 
 import { parseNonNegativeInteger, sendError } from "../lib/http.js";
-import { findProductByIdOrSlug, getAmazonCategories, getAmazonHome, getAmazonSite, searchProducts, serializeProductDetail } from "../repositories/amazon.js";
+import {
+  findProductByIdOrSlug,
+  getAmazonCategories,
+  getAmazonHome,
+  getAmazonSite,
+  getProductFacets,
+  searchProducts,
+  serializeProductDetail,
+  type ProductFilterParams,
+  type ProductSort,
+} from "../repositories/amazon.js";
 
 export const amazonRouter = Router();
+
+const productSorts: ProductSort[] = ["external_id_asc", "price_asc", "price_desc", "rating_desc", "review_count_desc"];
+
+function readString(value: unknown) {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseOptionalNonNegativeNumber(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  if (typeof value !== "string" && typeof value !== "number") {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function parseOptionalNonNegativeInteger(value: unknown) {
+  const parsed = parseOptionalNonNegativeNumber(value);
+  if (parsed === undefined || parsed === null) {
+    return parsed;
+  }
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function parseSort(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return "external_id_asc" satisfies ProductSort;
+  }
+  if (typeof value !== "string" || !productSorts.includes(value as ProductSort)) {
+    return null;
+  }
+  return value as ProductSort;
+}
+
+function parseProductFilters(query: Record<string, unknown>) {
+  const priceMin = parseOptionalNonNegativeNumber(query.priceMin);
+  const priceMax = parseOptionalNonNegativeNumber(query.priceMax);
+  const ratingMin = parseOptionalNonNegativeNumber(query.ratingMin);
+  const ratingMax = parseOptionalNonNegativeNumber(query.ratingMax);
+  const reviewCountMin = parseOptionalNonNegativeInteger(query.reviewCountMin);
+  const reviewCountMax = parseOptionalNonNegativeInteger(query.reviewCountMax);
+
+  if (
+    priceMin === null ||
+    priceMax === null ||
+    ratingMin === null ||
+    ratingMax === null ||
+    reviewCountMin === null ||
+    reviewCountMax === null
+  ) {
+    return null;
+  }
+  if ((ratingMin !== undefined && ratingMin > 5) || (ratingMax !== undefined && ratingMax > 5)) {
+    return null;
+  }
+  if ((priceMin !== undefined && priceMax !== undefined && priceMin > priceMax) || (ratingMin !== undefined && ratingMax !== undefined && ratingMin > ratingMax)) {
+    return null;
+  }
+  if (reviewCountMin !== undefined && reviewCountMax !== undefined && reviewCountMin > reviewCountMax) {
+    return null;
+  }
+
+  return {
+    query: readString(query.query),
+    category: readString(query.category),
+    subCategory: readString(query.subCategory),
+    priceMin,
+    priceMax,
+    ratingMin,
+    ratingMax,
+    reviewCountMin,
+    reviewCountMax,
+  } satisfies ProductFilterParams;
+}
 
 amazonRouter.get("/home", async (_req, res, next) => {
   try {
@@ -35,18 +128,47 @@ amazonRouter.get("/products", async (req, res, next) => {
   try {
     const limit = parseNonNegativeInteger(req.query.limit, 24, 100);
     const cursor = parseNonNegativeInteger(req.query.cursor, Number.NaN, 1000000);
-    if (limit === null || cursor === null) {
-      return sendError(res, 400, "INVALID_REQUEST", "limit and cursor must be non-negative integers.");
+    const filters = parseProductFilters(req.query);
+    const sort = parseSort(req.query.sort);
+
+    if (limit === null || cursor === null || !filters || !sort) {
+      return sendError(
+        res,
+        400,
+        "INVALID_REQUEST",
+        "limit, cursor, range filters, and sort must use valid non-negative values. ratingMin/ratingMax must be between 0 and 5.",
+      );
+    }
+
+    if (!Number.isNaN(cursor) && sort !== "external_id_asc") {
+      return sendError(res, 400, "INVALID_REQUEST", "cursor pagination is currently supported only with sort=external_id_asc.");
     }
 
     const result = await searchProducts({
-      query: typeof req.query.query === "string" ? req.query.query.trim() : undefined,
-      category: typeof req.query.category === "string" ? req.query.category.trim() : undefined,
-      subCategory: typeof req.query.subCategory === "string" ? req.query.subCategory.trim() : undefined,
+      ...filters,
       limit,
       cursor: Number.isNaN(cursor) ? undefined : cursor,
+      sort,
     });
 
+    if (!result) {
+      return sendError(res, 404, "DEMO_NOT_FOUND", "Amazon demo data has not been loaded.");
+    }
+
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+amazonRouter.get("/products/facets", async (req, res, next) => {
+  try {
+    const filters = parseProductFilters(req.query);
+    if (!filters) {
+      return sendError(res, 400, "INVALID_REQUEST", "Range filters must use valid non-negative values. ratingMin/ratingMax must be between 0 and 5.");
+    }
+
+    const result = await getProductFacets(filters);
     if (!result) {
       return sendError(res, 404, "DEMO_NOT_FOUND", "Amazon demo data has not been loaded.");
     }
