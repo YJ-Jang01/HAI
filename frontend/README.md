@@ -57,14 +57,15 @@ Move data to a shared location only if both frontend and backend need the exact 
 
 ## Run Locally
 
-Amazon is still a static prototype:
+Amazon is a React/Vite app:
 
 ```powershell
 cd frontend/Amazon
-python -m http.server 8000
+npm install
+npm run dev
 ```
 
-Open `http://localhost:8000`.
+Open `http://127.0.0.1:8000`.
 
 Netflix is a React/Vite app. By default it calls the backend API, so start `backend/` first when testing the integrated flow.
 

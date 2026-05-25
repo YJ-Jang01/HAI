@@ -1,12 +1,15 @@
 # Amazon Prototype
 
-This directory contains the active shopping-grid demo and is the main implementation target.
+This directory contains the active shopping-grid demo and is the main implementation target. It is implemented as a React/Vite app with Tailwind CSS.
 
 ## Files
 
-- `index.html`: page structure.
-- `style.css`: app-specific visual styling.
-- `script.js`: app-specific frontend behavior.
+- `index.html`: Vite HTML entry.
+- `src/App.jsx`: React UI, cart state, product filters, detail modal, and Tailwind utility styling.
+- `src/data.js`: loads and normalizes app-local product/review JSON.
+- `src/styles.css`: Tailwind CSS entry file.
+- `vite.config.js`: Vite config with React and Tailwind plugins.
+- `package.json`: local dev/build scripts.
 - `products.json`: app-local product metadata.
 - `review.json`: app-local review snippets.
 - `generate_reviews.py`, `generate_picture.py`: app-specific data or asset generation helpers.
@@ -26,20 +29,27 @@ This app should evolve into the main GroundedCompare prototype:
 
 ## Local Running Notes
 
-Serve this directory through a local web server because `script.js` fetches JSON files.
+Install dependencies and run the Vite dev server.
 
 Example:
 
 ```powershell
 cd frontend/Amazon
-python -m http.server 8000
+npm install
+npm run dev
 ```
 
-Open `http://localhost:8000`.
+Open `http://127.0.0.1:8000`.
+
+Build:
+
+```powershell
+npm run build
+```
 
 ## Future Organization
 
-Keep this directory self-contained. If `script.js` grows too large, split app logic inside this directory:
+Keep this directory self-contained. If `src/App.jsx` grows too large, split app logic inside this directory:
 
 - data loading
 - rendering

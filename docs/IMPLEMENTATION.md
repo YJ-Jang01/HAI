@@ -41,9 +41,10 @@ Main shopping demo.
 
 Current files:
 
-- `index.html`: shopping UI structure.
-- `style.css`: shopping UI styles.
-- `script.js`: data loading, category/search rendering, detail modal, reviews, cart count.
+- `index.html`: Vite HTML entry.
+- `src/App.jsx`: React UI, category/search rendering, filters, detail modal, reviews, and cart state.
+- `src/data.js`: product/review JSON loading and normalization helpers.
+- `src/styles.css`: Tailwind CSS entry file.
 - `products.json`: app-local product data.
 - `review.json`: app-local review data.
 - `picture/`: app-local image assets.
@@ -57,6 +58,7 @@ Already implemented:
 - review rendering
 - AI-style summary area in detail modal
 - cart count/toast
+- React/Vite/Tailwind frontend implementation
 
 Missing for GroundedCompare:
 

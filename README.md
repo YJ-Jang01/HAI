@@ -61,14 +61,15 @@ Do not add new top-level folders unless the project genuinely needs them.
 
 ## Running A Demo
 
-Amazon is still a static prototype, so serve the folder with a local web server.
+Amazon is a React/Vite app:
 
 ```powershell
 cd frontend/Amazon
-python -m http.server 8000
+npm install
+npm run dev
 ```
 
-Open `http://localhost:8000`.
+Open `http://127.0.0.1:8000`.
 
 Netflix is a React/Vite app that calls the backend API by default. Run the backend first if you want to use Supabase-backed data.
 
