@@ -5,11 +5,15 @@ import { db } from "../db/client.js";
 import {
   demoSites,
   productAssets,
+  productAttributeDefinitions,
+  productAttributeOptions,
+  productAttributeValues,
   productCategories,
   productFeatures,
   productOptionGroups,
   productOptionValues,
   productRatingBreakdown,
+  productReviewEvidence,
   productReviews,
   products,
   productSubcategories,
@@ -28,6 +32,14 @@ export type ProductFilterParams = {
   ratingMax?: number;
   reviewCountMin?: number;
   reviewCountMax?: number;
+  attributeFilters?: AttributeFilter[];
+};
+
+export type AttributeFilter = {
+  key: string;
+  min?: number;
+  max?: number;
+  value?: string | number | boolean;
 };
 
 export type ProductSearchParams = ProductFilterParams & {
@@ -117,8 +129,60 @@ async function getProductAssets(productId: string, assetTypes?: string[]) {
   }));
 }
 
+function serializeAttributeValue(row: {
+  valueText: string | null;
+  valueNumber: string | null;
+  valueBoolean: boolean | null;
+  optionValue: string | null;
+}) {
+  if (row.optionValue !== null) {
+    return row.optionValue;
+  }
+  if (row.valueNumber !== null) {
+    return toNumber(row.valueNumber);
+  }
+  if (row.valueBoolean !== null) {
+    return row.valueBoolean;
+  }
+  return row.valueText;
+}
+
+async function getProductAttributes(productId: string) {
+  const rows = await db
+    .select({
+      key: productAttributeDefinitions.key,
+      label: productAttributeDefinitions.label,
+      dataType: productAttributeDefinitions.dataType,
+      unit: productAttributeDefinitions.unit,
+      valueText: productAttributeValues.valueText,
+      valueNumber: productAttributeValues.valueNumber,
+      valueBoolean: productAttributeValues.valueBoolean,
+      optionValue: productAttributeOptions.value,
+      optionLabel: productAttributeOptions.label,
+      source: productAttributeValues.source,
+      humanReviewStatus: productAttributeValues.humanReviewStatus,
+      sortOrder: productAttributeDefinitions.sortOrder,
+    })
+    .from(productAttributeValues)
+    .innerJoin(productAttributeDefinitions, eq(productAttributeValues.attributeDefinitionId, productAttributeDefinitions.id))
+    .leftJoin(productAttributeOptions, eq(productAttributeValues.optionId, productAttributeOptions.id))
+    .where(eq(productAttributeValues.productId, productId))
+    .orderBy(asc(productAttributeDefinitions.sortOrder));
+
+  return rows.map((row) => ({
+    key: row.key,
+    label: row.label,
+    dataType: row.dataType,
+    unit: row.unit,
+    value: serializeAttributeValue(row),
+    displayValue: row.optionLabel ?? serializeAttributeValue(row),
+    source: row.source,
+    humanReviewStatus: row.humanReviewStatus,
+  }));
+}
+
 export async function serializeProductSummary(product: ProductRow, assetTypes: string[] = ["primary"]) {
-  const [taxonomy, assets] = await Promise.all([getProductTaxonomy(product), getProductAssets(product.id, assetTypes)]);
+  const [taxonomy, assets, attributes] = await Promise.all([getProductTaxonomy(product), getProductAssets(product.id, assetTypes), getProductAttributes(product.id)]);
 
   return {
     id: product.id,
@@ -133,6 +197,7 @@ export async function serializeProductSummary(product: ProductRow, assetTypes: s
     reviewCount: product.reviewCount,
     ...taxonomy,
     assets,
+    attributes,
   };
 }
 
@@ -222,7 +287,7 @@ async function findSubcategory(siteId: string, slug: string, categoryId?: string
 }
 
 async function buildProductFilters(site: typeof demoSites.$inferSelect, params: ProductFilterParams) {
-  const filters = [eq(products.demoSiteId, site.id)];
+  const filters: SQL[] = [eq(products.demoSiteId, site.id)];
   let categoryId: string | undefined;
 
   if (params.category) {
@@ -271,6 +336,40 @@ async function buildProductFilters(site: typeof demoSites.$inferSelect, params: 
     filters.push(lte(products.reviewCount, params.reviewCountMax));
   }
 
+  for (const attributeFilter of params.attributeFilters ?? []) {
+    const clauses: SQL[] = [
+      sql`${productAttributeValues.productId} = ${products.id}`,
+      sql`${productAttributeDefinitions.id} = ${productAttributeValues.attributeDefinitionId}`,
+      sql`${productAttributeDefinitions.demoSiteId} = ${site.id}`,
+      sql`${productAttributeDefinitions.key} = ${attributeFilter.key}`,
+    ];
+
+    if (attributeFilter.min !== undefined) {
+      clauses.push(sql`${productAttributeValues.valueNumber} >= ${attributeFilter.min.toFixed(2)}`);
+    }
+    if (attributeFilter.max !== undefined) {
+      clauses.push(sql`${productAttributeValues.valueNumber} <= ${attributeFilter.max.toFixed(2)}`);
+    }
+    if (attributeFilter.value !== undefined) {
+      if (typeof attributeFilter.value === "boolean") {
+        clauses.push(sql`${productAttributeValues.valueBoolean} = ${attributeFilter.value}`);
+      } else if (typeof attributeFilter.value === "number") {
+        clauses.push(sql`${productAttributeValues.valueNumber} = ${attributeFilter.value.toFixed(2)}`);
+      } else {
+        clauses.push(sql`(${productAttributeValues.valueText} = ${attributeFilter.value} or exists (
+          select 1 from ${productAttributeOptions}
+          where ${productAttributeOptions.id} = ${productAttributeValues.optionId}
+          and ${productAttributeOptions.value} = ${attributeFilter.value}
+        ))`);
+      }
+    }
+
+    filters.push(sql`exists (
+      select 1 from ${productAttributeValues}, ${productAttributeDefinitions}
+      where ${sql.join(clauses, sql` and `)}
+    )`);
+  }
+
   return { filters, empty: false };
 }
 
@@ -288,6 +387,133 @@ function getProductOrder(sort: ProductSort): SQL[] {
     return [desc(products.reviewCount), desc(products.rating), asc(products.externalId)];
   }
   return [asc(products.externalId)];
+}
+
+function percentile(sortedValues: number[], value: number) {
+  if (!sortedValues.length) {
+    return null;
+  }
+  const index = (sortedValues.length - 1) * value;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  if (lower === upper) {
+    return sortedValues[lower] ?? null;
+  }
+  const lowerValue = sortedValues[lower] ?? 0;
+  const upperValue = sortedValues[upper] ?? lowerValue;
+  return lowerValue + (upperValue - lowerValue) * (index - lower);
+}
+
+async function getAttributeFacets(productIds: string[]) {
+  if (!productIds.length) {
+    return {};
+  }
+
+  const rows = await db
+    .select({
+      key: productAttributeDefinitions.key,
+      label: productAttributeDefinitions.label,
+      dataType: productAttributeDefinitions.dataType,
+      unit: productAttributeDefinitions.unit,
+      valueText: productAttributeValues.valueText,
+      valueNumber: productAttributeValues.valueNumber,
+      valueBoolean: productAttributeValues.valueBoolean,
+      optionValue: productAttributeOptions.value,
+      optionLabel: productAttributeOptions.label,
+      sortOrder: productAttributeDefinitions.sortOrder,
+    })
+    .from(productAttributeValues)
+    .innerJoin(productAttributeDefinitions, eq(productAttributeValues.attributeDefinitionId, productAttributeDefinitions.id))
+    .leftJoin(productAttributeOptions, eq(productAttributeValues.optionId, productAttributeOptions.id))
+    .where(inArray(productAttributeValues.productId, productIds))
+    .orderBy(asc(productAttributeDefinitions.sortOrder), asc(productAttributeOptions.sortOrder));
+
+  const groups = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      dataType: string;
+      unit: string | null;
+      values: number[];
+      counts: Map<string, { value: string | boolean; label: string; count: number }>;
+      sortOrder: number;
+    }
+  >();
+
+  for (const row of rows) {
+    const group =
+      groups.get(row.key) ??
+      {
+        key: row.key,
+        label: row.label,
+        dataType: row.dataType,
+        unit: row.unit,
+        values: [],
+        counts: new Map<string, { value: string | boolean; label: string; count: number }>(),
+        sortOrder: row.sortOrder,
+      };
+
+    if (row.dataType === "number" && row.valueNumber !== null) {
+      group.values.push(Number(row.valueNumber));
+    } else if (row.dataType === "boolean" && row.valueBoolean !== null) {
+      const countKey = String(row.valueBoolean);
+      const existing = group.counts.get(countKey);
+      group.counts.set(countKey, {
+        value: row.valueBoolean,
+        label: row.valueBoolean ? "true" : "false",
+        count: (existing?.count ?? 0) + 1,
+      });
+    } else {
+      const value = row.optionValue ?? row.valueText;
+      if (value !== null) {
+        const existing = group.counts.get(value);
+        group.counts.set(value, {
+          value,
+          label: row.optionLabel ?? value,
+          count: (existing?.count ?? 0) + 1,
+        });
+      }
+    }
+
+    groups.set(row.key, group);
+  }
+
+  return Object.fromEntries(
+    [...groups.values()]
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((group) => {
+        if (group.dataType === "number") {
+          const values = [...group.values].sort((a, b) => a - b);
+          const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+          return [
+            group.key,
+            {
+              key: group.key,
+              label: group.label,
+              dataType: group.dataType,
+              unit: group.unit,
+              min: roundNullable(values[0]),
+              max: roundNullable(values[values.length - 1]),
+              average: roundNullable(average),
+              median: roundNullable(percentile(values, 0.5)),
+              p40: roundNullable(percentile(values, 0.4)),
+              p70: roundNullable(percentile(values, 0.7)),
+            },
+          ];
+        }
+
+        return [
+          group.key,
+          {
+            key: group.key,
+            label: group.label,
+            dataType: group.dataType,
+            values: [...group.counts.values()].sort((a, b) => b.count - a.count || String(a.value).localeCompare(String(b.value))),
+          },
+        ];
+      }),
+  );
 }
 
 export async function searchProducts(params: ProductSearchParams) {
@@ -342,6 +568,7 @@ export async function getProductFacets(params: ProductFilterParams) {
         rating: null,
         reviewCount: null,
       },
+      attributes: {},
       interpretationBasis: {
         notTooExpensive: null,
         goodReviews: null,
@@ -372,6 +599,14 @@ export async function getProductFacets(params: ProductFilterParams) {
     .where(and(...filters));
 
   const total = row?.total ?? 0;
+  const matchedProducts =
+    total > 0
+      ? await db
+          .select({ id: products.id })
+          .from(products)
+          .where(and(...filters))
+      : [];
+  const attributeFacets = await getAttributeFacets(matchedProducts.map((product) => product.id));
   const p40Price = roundNullable(row?.p40Price);
   const p70Rating = roundNullable(row?.p70Rating, 1);
   const p70ReviewCount = roundNullable(row?.p70ReviewCount, 0);
@@ -412,6 +647,7 @@ export async function getProductFacets(params: ProductFilterParams) {
             }
           : null,
     },
+    attributes: attributeFacets,
     interpretationBasis: {
       notTooExpensive: p40Price === null ? null : { field: "price.amount", operator: "<=", value: p40Price, basis: "40th percentile of matched products" },
       goodReviews:
@@ -507,6 +743,36 @@ async function getProductReviews(productId: string, limit: number) {
   }));
 }
 
+async function getProductReviewEvidence(productId: string) {
+  const rows = await db
+    .select({
+      reviewId: productReviews.id,
+      reviewExternalId: productReviews.externalId,
+      attributeKey: productAttributeDefinitions.key,
+      attributeLabel: productAttributeDefinitions.label,
+      sentiment: productReviewEvidence.sentiment,
+      evidenceText: productReviewEvidence.evidenceText,
+      source: productReviewEvidence.source,
+      humanReviewStatus: productReviewEvidence.humanReviewStatus,
+    })
+    .from(productReviewEvidence)
+    .innerJoin(productReviews, eq(productReviewEvidence.reviewId, productReviews.id))
+    .innerJoin(productAttributeDefinitions, eq(productReviewEvidence.attributeDefinitionId, productAttributeDefinitions.id))
+    .where(eq(productReviews.productId, productId))
+    .orderBy(asc(productReviews.externalId), asc(productAttributeDefinitions.sortOrder));
+
+  return rows.map((row) => ({
+    reviewId: row.reviewId,
+    reviewExternalId: row.reviewExternalId,
+    attributeKey: row.attributeKey,
+    attributeLabel: row.attributeLabel,
+    sentiment: row.sentiment,
+    evidenceText: row.evidenceText,
+    source: row.source,
+    humanReviewStatus: row.humanReviewStatus,
+  }));
+}
+
 async function getRelatedProducts(product: ProductRow) {
   const rows = await db
     .select()
@@ -519,13 +785,14 @@ async function getRelatedProducts(product: ProductRow) {
 }
 
 export async function serializeProductDetail(product: ProductRow) {
-  const [summary, assets, features, options, ratingBreakdown, reviews, relatedProducts] = await Promise.all([
+  const [summary, assets, features, options, ratingBreakdown, reviews, reviewEvidence, relatedProducts] = await Promise.all([
     serializeProductSummary(product, ["primary", "description", "brand"]),
     getProductAssets(product.id),
     getProductFeatures(product.id),
     getProductOptions(product.id),
     getProductRatingBreakdown(product.id),
     getProductReviews(product.id, 20),
+    getProductReviewEvidence(product.id),
     getRelatedProducts(product),
   ]);
 
@@ -536,6 +803,7 @@ export async function serializeProductDetail(product: ProductRow) {
     options,
     ratingBreakdown,
     reviews,
+    reviewEvidence,
     relatedProducts,
   };
 }
@@ -543,6 +811,7 @@ export async function serializeProductDetail(product: ProductRow) {
 export async function clearAmazonCatalog(siteId: string) {
   await db.delete(products).where(eq(products.demoSiteId, siteId));
   await db.delete(productCategories).where(eq(productCategories.demoSiteId, siteId));
+  await db.delete(productAttributeDefinitions).where(eq(productAttributeDefinitions.demoSiteId, siteId));
 }
 
 export async function getOrCreateAmazonSite() {
@@ -561,7 +830,7 @@ export async function getOrCreateAmazonSite() {
 export async function getLatestAmazonImportCounts() {
   const site = await getAmazonSite();
   if (!site) {
-    return { products: 0, categories: 0, subcategories: 0, reviews: 0 };
+    return { products: 0, categories: 0, subcategories: 0, reviews: 0, attributes: 0, evidence: 0 };
   }
 
   const [productCount] = await db.select({ value: count() }).from(products).where(eq(products.demoSiteId, site.id));
@@ -576,11 +845,20 @@ export async function getLatestAmazonImportCounts() {
     .from(productReviews)
     .innerJoin(products, eq(productReviews.productId, products.id))
     .where(eq(products.demoSiteId, site.id));
+  const [attributeCount] = await db.select({ value: count(productAttributeDefinitions.id) }).from(productAttributeDefinitions).where(eq(productAttributeDefinitions.demoSiteId, site.id));
+  const [evidenceCount] = await db
+    .select({ value: count(productReviewEvidence.id) })
+    .from(productReviewEvidence)
+    .innerJoin(productReviews, eq(productReviewEvidence.reviewId, productReviews.id))
+    .innerJoin(products, eq(productReviews.productId, products.id))
+    .where(eq(products.demoSiteId, site.id));
 
   return {
     products: productCount?.value ?? 0,
     categories: categoryCount?.value ?? 0,
     subcategories: subcategoryCount?.value ?? 0,
     reviews: reviewCount?.value ?? 0,
+    attributes: attributeCount?.value ?? 0,
+    evidence: evidenceCount?.value ?? 0,
   };
 }

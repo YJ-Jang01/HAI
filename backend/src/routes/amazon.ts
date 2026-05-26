@@ -9,6 +9,7 @@ import {
   getProductFacets,
   searchProducts,
   serializeProductDetail,
+  type AttributeFilter,
   type ProductFilterParams,
   type ProductSort,
 } from "../repositories/amazon.js";
@@ -57,6 +58,70 @@ function parseSort(value: unknown) {
   return value as ProductSort;
 }
 
+function parseAttributeFilterValue(value: unknown) {
+  const raw = readString(value);
+  if (raw === undefined) {
+    return null;
+  }
+  if (raw === "true") {
+    return true;
+  }
+  if (raw === "false") {
+    return false;
+  }
+  if (/^-?\d+(\.\d+)?$/.test(raw)) {
+    return Number(raw);
+  }
+  return raw;
+}
+
+function parseAttributeFilters(query: Record<string, unknown>) {
+  const filters = new Map<string, AttributeFilter>();
+
+  for (const [name, value] of Object.entries(query)) {
+    if (!name.startsWith("attribute.")) {
+      continue;
+    }
+
+    const rawName = name.slice("attribute.".length);
+    if (!rawName) {
+      return null;
+    }
+
+    const isMin = rawName.endsWith("Min");
+    const isMax = rawName.endsWith("Max");
+    const key = isMin || isMax ? rawName.slice(0, -3) : rawName;
+    if (!key) {
+      return null;
+    }
+
+    const current = filters.get(key) ?? { key };
+    if (isMin || isMax) {
+      const parsed = parseOptionalNonNegativeNumber(value);
+      if (parsed === null || parsed === undefined) {
+        return null;
+      }
+      if (isMin) {
+        current.min = parsed;
+      } else {
+        current.max = parsed;
+      }
+    } else {
+      const parsed = parseAttributeFilterValue(value);
+      if (parsed === null) {
+        return null;
+      }
+      current.value = parsed;
+    }
+    if (current.min !== undefined && current.max !== undefined && current.min > current.max) {
+      return null;
+    }
+    filters.set(key, current);
+  }
+
+  return [...filters.values()];
+}
+
 function parseProductFilters(query: Record<string, unknown>) {
   const priceMin = parseOptionalNonNegativeNumber(query.priceMin);
   const priceMax = parseOptionalNonNegativeNumber(query.priceMax);
@@ -64,6 +129,7 @@ function parseProductFilters(query: Record<string, unknown>) {
   const ratingMax = parseOptionalNonNegativeNumber(query.ratingMax);
   const reviewCountMin = parseOptionalNonNegativeInteger(query.reviewCountMin);
   const reviewCountMax = parseOptionalNonNegativeInteger(query.reviewCountMax);
+  const attributeFilters = parseAttributeFilters(query);
 
   if (
     priceMin === null ||
@@ -71,7 +137,8 @@ function parseProductFilters(query: Record<string, unknown>) {
     ratingMin === null ||
     ratingMax === null ||
     reviewCountMin === null ||
-    reviewCountMax === null
+    reviewCountMax === null ||
+    attributeFilters === null
   ) {
     return null;
   }
@@ -95,6 +162,7 @@ function parseProductFilters(query: Record<string, unknown>) {
     ratingMax,
     reviewCountMin,
     reviewCountMax,
+    attributeFilters,
   } satisfies ProductFilterParams;
 }
 
@@ -136,7 +204,7 @@ amazonRouter.get("/products", async (req, res, next) => {
         res,
         400,
         "INVALID_REQUEST",
-        "limit, cursor, range filters, and sort must use valid non-negative values. ratingMin/ratingMax must be between 0 and 5.",
+        "limit, cursor, range filters, attribute filters, and sort must use valid values. ratingMin/ratingMax must be between 0 and 5.",
       );
     }
 
@@ -165,7 +233,7 @@ amazonRouter.get("/products/facets", async (req, res, next) => {
   try {
     const filters = parseProductFilters(req.query);
     if (!filters) {
-      return sendError(res, 400, "INVALID_REQUEST", "Range filters must use valid non-negative values. ratingMin/ratingMax must be between 0 and 5.");
+      return sendError(res, 400, "INVALID_REQUEST", "Range filters and attribute filters must use valid values. ratingMin/ratingMax must be between 0 and 5.");
     }
 
     const result = await getProductFacets(filters);

@@ -387,3 +387,94 @@ export const productReviews = pgTable(
     index("idx_product_reviews_product_rating").on(table.productId, table.rating),
   ],
 );
+
+export const productAttributeDefinitions = pgTable(
+  "product_attribute_definitions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    demoSiteId: uuid("demo_site_id")
+      .notNull()
+      .references(() => demoSites.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    dataType: text("data_type").notNull(),
+    unit: text("unit"),
+    minValue: numeric("min_value", { precision: 12, scale: 2 }),
+    maxValue: numeric("max_value", { precision: 12, scale: 2 }),
+    description: text("description").notNull(),
+    isFilterable: boolean("is_filterable").notNull().default(true),
+    isRangeFacet: boolean("is_range_facet").notNull().default(false),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_product_attribute_definitions_demo_key").on(table.demoSiteId, table.key),
+    index("idx_product_attribute_definitions_demo_order").on(table.demoSiteId, table.sortOrder),
+  ],
+);
+
+export const productAttributeOptions = pgTable(
+  "product_attribute_options",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    attributeDefinitionId: uuid("attribute_definition_id")
+      .notNull()
+      .references(() => productAttributeDefinitions.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+    label: text("label").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [
+    uniqueIndex("uq_product_attribute_options_definition_value").on(table.attributeDefinitionId, table.value),
+    index("idx_product_attribute_options_definition_order").on(table.attributeDefinitionId, table.sortOrder),
+  ],
+);
+
+export const productAttributeValues = pgTable(
+  "product_attribute_values",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    attributeDefinitionId: uuid("attribute_definition_id")
+      .notNull()
+      .references(() => productAttributeDefinitions.id, { onDelete: "cascade" }),
+    optionId: uuid("option_id").references(() => productAttributeOptions.id, { onDelete: "restrict" }),
+    valueText: text("value_text"),
+    valueNumber: numeric("value_number", { precision: 12, scale: 2 }),
+    valueBoolean: boolean("value_boolean"),
+    source: text("source").notNull().default("generated"),
+    humanReviewStatus: text("human_review_status").notNull().default("generated"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_product_attribute_values_product_definition").on(table.productId, table.attributeDefinitionId),
+    index("idx_product_attribute_values_product_definition").on(table.productId, table.attributeDefinitionId),
+    index("idx_product_attribute_values_definition_number").on(table.attributeDefinitionId, table.valueNumber),
+    index("idx_product_attribute_values_definition_boolean").on(table.attributeDefinitionId, table.valueBoolean),
+    index("idx_product_attribute_values_definition_option").on(table.attributeDefinitionId, table.optionId),
+  ],
+);
+
+export const productReviewEvidence = pgTable(
+  "product_review_evidence",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    reviewId: uuid("review_id")
+      .notNull()
+      .references(() => productReviews.id, { onDelete: "cascade" }),
+    attributeDefinitionId: uuid("attribute_definition_id")
+      .notNull()
+      .references(() => productAttributeDefinitions.id, { onDelete: "cascade" }),
+    sentiment: text("sentiment").notNull(),
+    evidenceText: text("evidence_text").notNull(),
+    source: text("source").notNull().default("generated"),
+    humanReviewStatus: text("human_review_status").notNull().default("generated"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_product_review_evidence_review").on(table.reviewId),
+    index("idx_product_review_evidence_attribute").on(table.attributeDefinitionId),
+  ],
+);
