@@ -1,12 +1,12 @@
 import sys
 import os
-# Add the parent directory to the system path so Python can find 'shared'
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'C:\Users\COM\Desktop\HAI Project\HAI\ai\shared')))
+
+# Add the parent directory to the system path so Python can find the 'shared' folder dynamically
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from shared.models import DisplayResponse
 from google import genai
 from google.genai import types
-from models import DisplayResponse
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,6 +18,7 @@ if not api_key:
 
 client = genai.Client(api_key=api_key)
 
+
 def generate_display_payload(target_items: list[str], feature_focus: str, raw_reviews: str) -> str:
     """
     Takes raw reviews from the database and generates UI-ready 
@@ -25,20 +26,26 @@ def generate_display_payload(target_items: list[str], feature_focus: str, raw_re
     """
     
     system_instruction = (
-        "You are the Display Agent for GroundedCompare, an e-commerce interface. "
-        "Your job is to read raw product reviews and generate highly concise, objective micro-summaries "
-        "and extract evidence snippets for specific products based on the user's feature focus. "
-        "The text will be displayed in small UI overlays, so it must be brief. "
-        "Do not invent information; only use the provided raw reviews. "
+        "You are the Display Agent for GroundedCompare. Your job is to take raw backend product data "
+        "and format it into UI-ready evidence overlays and a comparison tray. "
+        "CRITICAL INSTRUCTION: You must populate the `transparency_statement` to explicitly explain "
+        "how you interpreted the user's subjective constraints based on the data (e.g., 'AI interpreted "
+        "your request as: Price under $120 and Rating above 4.3'). "
+        "Determine the correct `displayMode`: use 'in_place_overlay' for standard multi-item summaries, "
+        "or 'nested_detail' if the user asked a highly specific follow-up comparing a specific feature. "
+        "Populate the `detailedComparison` field if in 'nested_detail' mode. "
+        "Populate the `tray` with the IDs of the items currently being compared. "
         "Strictly output valid JSON matching the requested schema."
     )
     
     prompt = f"""
     Target Items: {target_items}
-    Feature Focus: {feature_focus}
+    User's Feature Focus / Constraints: {feature_focus}
     
-    Raw Reviews Data:
+    Raw Backend Reviews & API Data:
     {raw_reviews}
+    
+    Generate the display payload. Ensure the transparency statement clearly justifies any range-based decisions.
     """
     
     response = client.models.generate_content(
