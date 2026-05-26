@@ -46,6 +46,7 @@ Open:
 - `http://127.0.0.1:8002/api/demos/netflix/items?tag=action`
 - `http://127.0.0.1:8002/api/demos/amazon/home`
 - `http://127.0.0.1:8002/api/demos/amazon/products?limit=5`
+- `http://127.0.0.1:8002/api/demos/amazon/products/facets?attribute.warmthLevelMin=4`
 
 `DATABASE_URL` is required because the backend targets Supabase Postgres directly.
 
@@ -69,7 +70,7 @@ Verified results:
 - `drizzle/0000_initial.sql` was applied successfully.
 - `drizzle/0001_amazon_catalog.sql` was applied successfully.
 - Netflix seed import completed with 30 media items, 3 tags, and 5 shelves.
-- Amazon seed import completed with 70 products, 7 categories, 30 subcategories, and 149 reviews.
+- Amazon seed import completed with 200 products, 6 categories, 28 subcategories, 1,000 reviews, 11 AI attributes, and 2,000 evidence rows.
 - `GET /health` returned `{ "ok": true }`.
 - `GET /api/demos/netflix/home` returned Supabase-backed Netflix home data.
 - `GET /api/demos/amazon/home` returned Supabase-backed Amazon category data.
@@ -103,7 +104,8 @@ GET  /api/demos/netflix/items?query=&tag=&limit=&offset=
 GET  /api/demos/netflix/items/:itemId
 GET  /api/demos/amazon/home
 GET  /api/demos/amazon/categories
-GET  /api/demos/amazon/products?query=&category=&subCategory=&limit=&cursor=
+GET  /api/demos/amazon/products?query=&category=&subCategory=&priceMax=&attribute.warmthLevelMin=&attribute.waterproof=&limit=&cursor=
+GET  /api/demos/amazon/products/facets?query=&category=&attribute.material=
 GET  /api/demos/amazon/products/:productId
 POST /api/logs
 ```
@@ -132,9 +134,11 @@ Frontend verification:
 - `src/repositories/`: query and serialization logic.
 - `src/scripts/migrate.ts`: applies all SQL files in `drizzle/` in filename order.
 - `src/scripts/seed-netflix.ts`: imports `frontend/Netflix/data.json` into normalized tables.
-- `src/scripts/seed-amazon.ts`: imports `frontend/Amazon/products.json` and `frontend/Amazon/review.json` into normalized tables.
+- `src/scripts/seed-amazon.ts`: imports `frontend/Amazon/products.json`, `review.json`, `attribute_taxonomy.json`, and `review_evidence.json` into normalized tables.
 - `drizzle/0000_initial.sql`: reproducible SQL schema migration.
 - `drizzle/0001_amazon_catalog.sql`: Amazon product catalog and review schema migration.
+- `drizzle/0002_amazon_range_indexes.sql`: Amazon range filter indexes.
+- `drizzle/0003_amazon_ai_attributes.sql`: Amazon AI attribute taxonomy/value/evidence schema.
 
 ## `supabase/`
 

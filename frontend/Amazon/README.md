@@ -10,9 +10,13 @@ This directory contains the active shopping-grid demo and is the main implementa
 - `src/styles.css`: Tailwind CSS entry file.
 - `vite.config.js`: Vite config with React and Tailwind plugins.
 - `package.json`: local dev/build scripts.
-- `products.json`: app-local product metadata.
-- `review.json`: app-local review snippets.
-- `generate_reviews.py`, `generate_picture.py`: app-specific data or asset generation helpers.
+- `products.json`: Codex-generated synthetic product metadata with AI-ready attributes.
+- `review.json`: Codex-generated review snippets, five reviews per product.
+- `attribute_taxonomy.json`: attribute definitions/options used by backend filters and AI interpretation.
+- `review_evidence.json`: review-to-attribute evidence snippets for grounded display summaries.
+- `scripts/generate_ai_catalog.py`: deterministic no-API data generator.
+- `scripts/validate_ai_catalog.py`: local validation for product/review/attribute/evidence consistency.
+- `generate_reviews.py`, `generate_picture.py`: legacy app-specific data or asset generation helpers; do not use for the current AI-ready seed data.
 - `picture/`: local image assets.
 
 ## Current Role

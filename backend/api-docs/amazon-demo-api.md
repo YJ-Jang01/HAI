@@ -14,6 +14,8 @@ The current frontend data files are:
 
 - `frontend/Amazon/products.json`
 - `frontend/Amazon/review.json`
+- `frontend/Amazon/attribute_taxonomy.json`
+- `frontend/Amazon/review_evidence.json`
 
 Reviews may be replaced later by the frontend team. The backend assumes the same review fields:
 
@@ -21,7 +23,7 @@ Reviews may be replaced later by the frontend team. The backend assumes the same
 id, productId, userName, rating, date, title, comment
 ```
 
-AI-specific task and generated-evidence tables are intentionally not included yet. The schema keeps stable product and review identifiers so future AI agents can request, cite, and display evidence by product/review ID.
+AI-specific task tables are intentionally not included yet. The catalog now includes AI-ready product attributes and review evidence so agents can translate natural-language requests into objective API filters and cite grounded review snippets.
 
 ## Schema Diagram
 
@@ -41,6 +43,13 @@ erDiagram
   product_option_groups ||--o{ product_option_values : has
   products ||--o{ product_rating_breakdown : has
   products ||--o{ product_reviews : has
+  demo_sites ||--o{ product_attribute_definitions : defines
+  product_attribute_definitions ||--o{ product_attribute_options : has
+  products ||--o{ product_attribute_values : has
+  product_attribute_definitions ||--o{ product_attribute_values : typed_by
+  product_attribute_options ||--o{ product_attribute_values : selected_by
+  product_reviews ||--o{ product_review_evidence : cites
+  product_attribute_definitions ||--o{ product_review_evidence : explains
 
   demo_sites {
     uuid id PK
@@ -130,6 +139,51 @@ erDiagram
     text title
     text body
     timestamptz created_at
+  }
+
+  product_attribute_definitions {
+    uuid id PK
+    uuid demo_site_id FK
+    text key
+    text label
+    text data_type
+    text unit
+    numeric min_value
+    numeric max_value
+    text description
+    boolean is_filterable
+    boolean is_range_facet
+    int sort_order
+  }
+
+  product_attribute_options {
+    uuid id PK
+    uuid attribute_definition_id FK
+    text value
+    text label
+    int sort_order
+  }
+
+  product_attribute_values {
+    uuid id PK
+    uuid product_id FK
+    uuid attribute_definition_id FK
+    uuid option_id FK
+    text value_text
+    numeric value_number
+    boolean value_boolean
+    text source
+    text human_review_status
+  }
+
+  product_review_evidence {
+    uuid id PK
+    uuid review_id FK
+    uuid attribute_definition_id FK
+    text sentiment
+    text evidence_text
+    text source
+    text human_review_status
   }
 ```
 
@@ -236,6 +290,62 @@ erDiagram
 | `body` | text | not null | Review text. |
 | `created_at` | timestamptz | not null | Insert timestamp. |
 
+### `product_attribute_definitions`
+
+| Column | Type | Constraint | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | primary key | Internal attribute definition identifier. |
+| `demo_site_id` | uuid | references `demo_sites(id)`, not null | Demo site that owns the attribute taxonomy. |
+| `key` | text | not null, unique with `demo_site_id` | API/filter key such as `warmthLevel` or `waterproof`. |
+| `label` | text | not null | Human-readable label for display. |
+| `data_type` | text | not null | One of `text`, `number`, `boolean`, or `enum`. |
+| `unit` | text | nullable | Unit for numeric values, e.g. `g` or `level`. |
+| `min_value` | numeric(12,2) | nullable | Minimum allowed numeric value. |
+| `max_value` | numeric(12,2) | nullable | Maximum allowed numeric value. |
+| `description` | text | not null | Human-aligned meaning of the attribute for AI use. |
+| `is_filterable` | boolean | not null | Whether the attribute can be used by product filters. |
+| `is_range_facet` | boolean | not null | Whether numeric range summaries should be returned in facets. |
+| `sort_order` | integer | not null | Stable attribute display order. |
+| `created_at` | timestamptz | not null | Insert timestamp. |
+
+### `product_attribute_options`
+
+| Column | Type | Constraint | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | primary key | Internal option identifier. |
+| `attribute_definition_id` | uuid | references `product_attribute_definitions(id)`, not null | Enum attribute that owns this option. |
+| `value` | text | not null, unique with `attribute_definition_id` | Stable enum value such as `wool_blend`. |
+| `label` | text | not null | Display label such as `Wool Blend`. |
+| `sort_order` | integer | not null | Option display order. |
+
+### `product_attribute_values`
+
+| Column | Type | Constraint | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | primary key | Internal product attribute value identifier. |
+| `product_id` | uuid | references `products(id)`, not null | Product that owns this attribute value. |
+| `attribute_definition_id` | uuid | references `product_attribute_definitions(id)`, not null | Attribute definition for this value. |
+| `option_id` | uuid | references `product_attribute_options(id)`, nullable | Enum option value when `data_type=enum`. |
+| `value_text` | text | nullable | Text value when `data_type=text`. |
+| `value_number` | numeric(12,2) | nullable | Numeric value when `data_type=number`. |
+| `value_boolean` | boolean | nullable | Boolean value when `data_type=boolean`. |
+| `source` | text | not null | Source label, currently `generated`. |
+| `human_review_status` | text | not null | `generated`, `reviewed`, or `approved`. |
+| `created_at` | timestamptz | not null | Insert timestamp. |
+
+### `product_review_evidence`
+
+| Column | Type | Constraint | Description |
+| --- | --- | --- | --- |
+| `id` | uuid | primary key | Internal evidence row identifier. |
+| `review_id` | uuid | references `product_reviews(id)`, not null | Review that contains the evidence. |
+| `attribute_definition_id` | uuid | references `product_attribute_definitions(id)`, not null | Attribute supported by this review snippet. |
+| `sentiment` | text | not null | `positive`, `neutral`, or `negative`. |
+| `evidence_text` | text | not null | Short snippet grounded in the review text. |
+| `source` | text | not null | Source label, currently `generated`. |
+| `human_review_status` | text | not null | `generated`, `reviewed`, or `approved`. |
+| `created_at` | timestamptz | not null | Insert timestamp. |
+
 ## Indexes
 
 ```sql
@@ -277,6 +387,27 @@ on products (demo_site_id, rating desc, external_id);
 
 create index idx_products_demo_review_count_external
 on products (demo_site_id, review_count desc, external_id);
+
+create unique index uq_product_attribute_definitions_demo_key
+on product_attribute_definitions (demo_site_id, key);
+
+create unique index uq_product_attribute_options_definition_value
+on product_attribute_options (attribute_definition_id, value);
+
+create unique index uq_product_attribute_values_product_definition
+on product_attribute_values (product_id, attribute_definition_id);
+
+create index idx_product_attribute_values_definition_number
+on product_attribute_values (attribute_definition_id, value_number);
+
+create index idx_product_attribute_values_definition_boolean
+on product_attribute_values (attribute_definition_id, value_boolean);
+
+create index idx_product_attribute_values_definition_option
+on product_attribute_values (attribute_definition_id, option_id);
+
+create index idx_product_review_evidence_review
+on product_review_evidence (review_id);
 ```
 
 These indexes target the current frontend paths:
@@ -285,6 +416,8 @@ These indexes target the current frontend paths:
 - category/subcategory filtering
 - cursor pagination by `external_id`
 - AI range filtering by price, rating, and review count
+- AI attribute filtering by numeric, boolean, and enum attribute values
+- review evidence loading for grounded display summaries
 - product detail asset/feature/option/review loading
 - future AI retrieval by stable product/review references
 
@@ -420,7 +553,7 @@ GET /api/demos/amazon/categories
 Returns product summaries for search, category/subcategory listing pages, and AI-generated range filters. The default sort uses cursor pagination with `external_id`.
 
 ```text
-GET /api/demos/amazon/products?query=coat&category=outerwear&subCategory=coats&priceMax=120&ratingMin=4.3&reviewCountMin=50&sort=rating_desc&limit=24
+GET /api/demos/amazon/products?query=coat&category=outerwear&subCategory=coats&priceMax=120&ratingMin=4.3&attribute.warmthLevelMin=4&attribute.waterproof=true&sort=rating_desc&limit=24
 ```
 
 Query parameters:
@@ -436,6 +569,9 @@ Query parameters:
 | `ratingMax` | number | no | Maximum average product rating. Must be between `0` and `5`. |
 | `reviewCountMin` | integer | no | Minimum denormalized product review count. Must be `>= 0`. |
 | `reviewCountMax` | integer | no | Maximum denormalized product review count. Must be `>= 0`. |
+| `attribute.{key}` | string, number, boolean | no | Exact attribute filter. Examples: `attribute.material=wool_blend`, `attribute.waterproof=true`. |
+| `attribute.{key}Min` | number | no | Minimum numeric attribute filter. Example: `attribute.warmthLevelMin=4`. |
+| `attribute.{key}Max` | number | no | Maximum numeric attribute filter. Example: `attribute.weightGramsMax=900`. |
 | `sort` | enum | no | One of `external_id_asc`, `price_asc`, `price_desc`, `rating_desc`, `review_count_desc`. Default `external_id_asc`. |
 | `limit` | integer | no | Max products to return. Default `24`, max `100`. |
 | `cursor` | integer | no | Last seen `externalId`; next page returns products after this value. Currently supported only with `sort=external_id_asc`. |
@@ -445,6 +581,7 @@ AI use:
 - Use this endpoint after the NL request agent resolves a user phrase into explicit filters.
 - Range-like phrases must be converted into numeric parameters before this endpoint is called.
 - Example: `not too expensive` may become `priceMax=120`; `good reviews` may become `ratingMin=4.3&reviewCountMin=50`.
+- Attribute phrases should use the taxonomy keys. Example: `warm` may become `attribute.warmthLevelMin=4`; `waterproof bag` may become `category=bags&attribute.waterproof=true`.
 
 Example response:
 
@@ -456,7 +593,7 @@ Example response:
   "pagination": {
     "limit": 24,
     "nextCursor": null,
-    "total": 70
+    "total": 200
   }
 }
 ```
@@ -482,6 +619,9 @@ Supported query parameters:
 | `ratingMax` | number | no | Optional maximum rating. |
 | `reviewCountMin` | integer | no | Optional minimum review count. |
 | `reviewCountMax` | integer | no | Optional maximum review count. |
+| `attribute.{key}` | string, number, boolean | no | Optional exact attribute filter applied to the candidate set. |
+| `attribute.{key}Min` | number | no | Optional minimum numeric attribute filter. |
+| `attribute.{key}Max` | number | no | Optional maximum numeric attribute filter. |
 
 Example response:
 
@@ -513,6 +653,44 @@ Example response:
       "p70": 350
     }
   },
+  "attributes": {
+    "warmthLevel": {
+      "key": "warmthLevel",
+      "label": "Warmth Level",
+      "dataType": "number",
+      "unit": "level",
+      "min": 1,
+      "max": 5,
+      "average": 3.42,
+      "median": 4,
+      "p40": 3,
+      "p70": 4
+    },
+    "material": {
+      "key": "material",
+      "label": "Material",
+      "dataType": "enum",
+      "values": [
+        {
+          "value": "wool_blend",
+          "label": "Wool Blend",
+          "count": 8
+        }
+      ]
+    },
+    "waterproof": {
+      "key": "waterproof",
+      "label": "Waterproof",
+      "dataType": "boolean",
+      "values": [
+        {
+          "value": true,
+          "label": "true",
+          "count": 13
+        }
+      ]
+    }
+  },
   "interpretationBasis": {
     "notTooExpensive": {
       "field": "price.amount",
@@ -542,7 +720,7 @@ AI use:
 
 - Use this endpoint to ground range-like natural language in the current product set.
 - The AI display should expose the resolved rule to the user, for example: `not too expensive = price <= 99.99, based on the lower 40% of matching products`.
-- The backend returns numeric summaries only; it does not decide the user's final priority.
+- The backend returns numeric and attribute summaries only; it does not decide the user's final priority.
 
 ## `GET /api/demos/amazon/products/{productId}`
 
@@ -553,7 +731,38 @@ GET /api/demos/amazon/products/1
 GET /api/demos/amazon/products/cashmere-coat-1
 ```
 
-Use this when a user opens a product detail modal. The response includes product assets, feature bullets, option groups, rating breakdown, reviews, and related products.
+Use this when a user opens a product detail modal. The response includes product assets, feature bullets, option groups, rating breakdown, reviews, AI-ready attributes, review evidence, and related products.
+
+Relevant response fields:
+
+```json
+{
+  "attributes": [
+    {
+      "key": "warmthLevel",
+      "label": "Warmth Level",
+      "dataType": "number",
+      "unit": "level",
+      "value": 5,
+      "displayValue": 5,
+      "source": "generated",
+      "humanReviewStatus": "generated"
+    }
+  ],
+  "reviewEvidence": [
+    {
+      "reviewId": "uuid",
+      "reviewExternalId": 1,
+      "attributeKey": "warmthLevel",
+      "attributeLabel": "Warmth Level",
+      "sentiment": "positive",
+      "evidenceText": "보온감은 5/5 수준이라 계절 선택 기준을 세우기 쉽습니다",
+      "source": "generated",
+      "humanReviewStatus": "generated"
+    }
+  ]
+}
+```
 
 ## `POST /api/logs`
 
@@ -595,11 +804,12 @@ Common codes:
 
 ## AI Feature Notes
 
-The current schema supports future AI features without adding AI-specific tables yet:
+The current schema supports API-grounded AI product selection:
 
 - Natural-language selection can refer to `products.id`, `externalId`, category slugs, and visible product order.
 - Evidence display can cite `product_reviews.id` and `product_reviews.external_id`.
 - Range-aware AI interpretation should call `GET /products/facets` first, expose the numeric rule to the user, then call `GET /products` with explicit range filters.
 - Range judgments must be grounded in API data such as `price.amount`, `rating`, and `reviewCount`; the AI should not invent thresholds that are not visible in the response contract.
-- Review snippets can later be topic-tagged in a separate table, e.g. `product_review_topics`, after the AI engineer finalizes topic extraction fields.
+- Attribute judgments must use `product_attribute_definitions.key` values such as `warmthLevel`, `waterproof`, `material`, and `weightGrams`.
+- Review evidence should cite `product_review_evidence` snippets instead of inventing review claims.
 - AI-generated summaries should not overwrite `products.description`; store generated outputs separately once the AI display contract is stable.

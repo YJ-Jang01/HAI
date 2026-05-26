@@ -1,0 +1,314 @@
+[
+  {
+    "key": "brand",
+    "label": "Brand",
+    "dataType": "enum",
+    "description": "Synthetic demo brand name used for brand-aware filtering.",
+    "isFilterable": true,
+    "isRangeFacet": false,
+    "options": [
+      {
+        "value": "northvale",
+        "label": "Northvale"
+      },
+      {
+        "value": "urbanloom",
+        "label": "Urban Loom"
+      },
+      {
+        "value": "aerostitch",
+        "label": "AeroStitch"
+      },
+      {
+        "value": "fieldmere",
+        "label": "Fieldmere"
+      },
+      {
+        "value": "solen",
+        "label": "Solen"
+      },
+      {
+        "value": "modura",
+        "label": "Modura"
+      },
+      {
+        "value": "evertrail",
+        "label": "Evertrail"
+      },
+      {
+        "value": "lumaweave",
+        "label": "LumaWeave"
+      },
+      {
+        "value": "atelier9",
+        "label": "Atelier 9"
+      },
+      {
+        "value": "verdanthill",
+        "label": "Verdant Hill"
+      },
+      {
+        "value": "komorebi",
+        "label": "Komorebi"
+      },
+      {
+        "value": "plainworks",
+        "label": "Plainworks"
+      }
+    ]
+  },
+  {
+    "key": "material",
+    "label": "Material",
+    "dataType": "enum",
+    "description": "Main material or material blend used by the product.",
+    "isFilterable": true,
+    "isRangeFacet": false,
+    "options": [
+      {
+        "value": "wool_blend",
+        "label": "Wool Blend"
+      },
+      {
+        "value": "cashmere_blend",
+        "label": "Cashmere Blend"
+      },
+      {
+        "value": "cotton",
+        "label": "Cotton"
+      },
+      {
+        "value": "organic_cotton",
+        "label": "Organic Cotton"
+      },
+      {
+        "value": "recycled_nylon",
+        "label": "Recycled Nylon"
+      },
+      {
+        "value": "polyester",
+        "label": "Polyester"
+      },
+      {
+        "value": "full_grain_leather",
+        "label": "Full-Grain Leather"
+      },
+      {
+        "value": "suede",
+        "label": "Suede"
+      },
+      {
+        "value": "canvas",
+        "label": "Canvas"
+      },
+      {
+        "value": "denim",
+        "label": "Denim"
+      },
+      {
+        "value": "fleece",
+        "label": "Fleece"
+      },
+      {
+        "value": "mesh",
+        "label": "Mesh"
+      },
+      {
+        "value": "knit_blend",
+        "label": "Knit Blend"
+      }
+    ]
+  },
+  {
+    "key": "season",
+    "label": "Season",
+    "dataType": "enum",
+    "description": "Primary season or weather context for product use.",
+    "isFilterable": true,
+    "isRangeFacet": false,
+    "options": [
+      {
+        "value": "spring",
+        "label": "Spring"
+      },
+      {
+        "value": "summer",
+        "label": "Summer"
+      },
+      {
+        "value": "fall",
+        "label": "Fall"
+      },
+      {
+        "value": "winter",
+        "label": "Winter"
+      },
+      {
+        "value": "all_season",
+        "label": "All Season"
+      }
+    ]
+  },
+  {
+    "key": "fit",
+    "label": "Fit",
+    "dataType": "enum",
+    "description": "Primary fit profile used for user preference filtering.",
+    "isFilterable": true,
+    "isRangeFacet": false,
+    "options": [
+      {
+        "value": "slim",
+        "label": "Slim"
+      },
+      {
+        "value": "regular",
+        "label": "Regular"
+      },
+      {
+        "value": "relaxed",
+        "label": "Relaxed"
+      },
+      {
+        "value": "oversized",
+        "label": "Oversized"
+      },
+      {
+        "value": "adjustable",
+        "label": "Adjustable"
+      }
+    ]
+  },
+  {
+    "key": "style",
+    "label": "Style",
+    "dataType": "enum",
+    "description": "Visual style that can be matched with natural-language requests.",
+    "isFilterable": true,
+    "isRangeFacet": false,
+    "options": [
+      {
+        "value": "minimal",
+        "label": "Minimal"
+      },
+      {
+        "value": "technical",
+        "label": "Technical"
+      },
+      {
+        "value": "classic",
+        "label": "Classic"
+      },
+      {
+        "value": "sporty",
+        "label": "Sporty"
+      },
+      {
+        "value": "outdoor",
+        "label": "Outdoor"
+      },
+      {
+        "value": "elegant",
+        "label": "Elegant"
+      },
+      {
+        "value": "streetwear",
+        "label": "Streetwear"
+      },
+      {
+        "value": "casual",
+        "label": "Casual"
+      }
+    ]
+  },
+  {
+    "key": "occasion",
+    "label": "Occasion",
+    "dataType": "enum",
+    "description": "Most suitable usage context for the product.",
+    "isFilterable": true,
+    "isRangeFacet": false,
+    "options": [
+      {
+        "value": "commute",
+        "label": "Commute"
+      },
+      {
+        "value": "travel",
+        "label": "Travel"
+      },
+      {
+        "value": "outdoor",
+        "label": "Outdoor"
+      },
+      {
+        "value": "office",
+        "label": "Office"
+      },
+      {
+        "value": "daily",
+        "label": "Daily"
+      },
+      {
+        "value": "formal",
+        "label": "Formal"
+      },
+      {
+        "value": "workout",
+        "label": "Workout"
+      }
+    ]
+  },
+  {
+    "key": "warmthLevel",
+    "label": "Warmth Level",
+    "dataType": "number",
+    "unit": "level",
+    "minValue": 1,
+    "maxValue": 5,
+    "description": "Relative warmth from 1 (very light) to 5 (very warm).",
+    "isFilterable": true,
+    "isRangeFacet": true
+  },
+  {
+    "key": "comfortLevel",
+    "label": "Comfort Level",
+    "dataType": "number",
+    "unit": "level",
+    "minValue": 1,
+    "maxValue": 5,
+    "description": "Relative comfort from 1 to 5 based on fit, softness, and wearability.",
+    "isFilterable": true,
+    "isRangeFacet": true
+  },
+  {
+    "key": "durabilityLevel",
+    "label": "Durability Level",
+    "dataType": "number",
+    "unit": "level",
+    "minValue": 1,
+    "maxValue": 5,
+    "description": "Relative durability from 1 to 5 based on material and construction.",
+    "isFilterable": true,
+    "isRangeFacet": true
+  },
+  {
+    "key": "waterproof",
+    "label": "Waterproof",
+    "dataType": "boolean",
+    "description": "Whether the product is designed to resist rain or wet conditions.",
+    "isFilterable": true,
+    "isRangeFacet": false
+  },
+  {
+    "key": "weightGrams",
+    "label": "Weight",
+    "dataType": "number",
+    "unit": "g",
+    "minValue": 80,
+    "maxValue": 2200,
+    "description": "Approximate product weight in grams for lightweight/heavy requests.",
+    "isFilterable": true,
+    "isRangeFacet": true
+  }
+]
