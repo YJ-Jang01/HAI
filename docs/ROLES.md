@@ -32,6 +32,7 @@ Frontend implements the two demo pages and the mock data needed to make them usa
   - `frontend/Amazon/products.json`
   - `frontend/Amazon/review.json`
   - `frontend/Netflix/data.json`
+- Amazon's large API-backed v2 dataset lives in `backend/fixtures/amazon/`; frontend app-local Amazon JSON is a fallback/mock fixture, not the backend seed source.
 - UI states for:
   - baseline browsing
   - chat-only AI
@@ -69,7 +70,7 @@ Backend designs and deploys the data layer and API surface used by frontend and 
 - Store and serve:
   - demo site metadata
   - products/media items
-  - reviews/evidence snippets
+  - reviews, review profiles, evidence snippets, and issue summaries
   - AI task requests/results
   - study tasks and conditions
   - interaction logs

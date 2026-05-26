@@ -20,6 +20,8 @@ backend/
 |-- .env.example
 |-- package.json
 |-- tsconfig.json
+|-- fixtures/
+|-- scripts/
 |-- src/
 |-- drizzle/
 |-- supabase/
@@ -69,8 +71,11 @@ Verified results:
 
 - `drizzle/0000_initial.sql` was applied successfully.
 - `drizzle/0001_amazon_catalog.sql` was applied successfully.
+- `drizzle/0002_amazon_range_indexes.sql` was applied successfully.
+- `drizzle/0003_amazon_ai_attributes.sql` was applied successfully.
+- `drizzle/0004_amazon_review_intelligence.sql` was applied successfully.
 - Netflix seed import completed with 30 media items, 3 tags, and 5 shelves.
-- Amazon seed import completed with 200 products, 6 categories, 28 subcategories, 1,000 reviews, 11 AI attributes, and 2,000 evidence rows.
+- Amazon seed import completed with 400 products, 6 categories, 36 subcategories, 10,000 reviews, 10,000 review profiles, 40 AI attributes, and 50,000 evidence rows.
 - `GET /health` returned `{ "ok": true }`.
 - `GET /api/demos/netflix/home` returned Supabase-backed Netflix home data.
 - `GET /api/demos/amazon/home` returned Supabase-backed Amazon category data.
@@ -110,6 +115,8 @@ GET  /api/demos/amazon/products/:productId
 POST /api/logs
 ```
 
+Amazon facets now include `reviewIntelligence` summaries for negative issue types, affected attributes, and reviewer profile distributions. Product detail reviews include a `profile` object, and `reviewEvidence` includes `issueType`, `severity`, and a typed `evidenceValue`.
+
 Never share these with frontend code:
 
 - `DATABASE_URL`
@@ -134,11 +141,15 @@ Frontend verification:
 - `src/repositories/`: query and serialization logic.
 - `src/scripts/migrate.ts`: applies all SQL files in `drizzle/` in filename order.
 - `src/scripts/seed-netflix.ts`: imports `frontend/Netflix/data.json` into normalized tables.
-- `src/scripts/seed-amazon.ts`: imports `frontend/Amazon/products.json`, `review.json`, `attribute_taxonomy.json`, and `review_evidence.json` into normalized tables.
+- `src/scripts/seed-amazon.ts`: imports `fixtures/amazon/products.json`, `review.json`, `review_profiles.json`, `attribute_taxonomy.json`, and `review_evidence.json` into normalized tables.
+- `scripts/generate_amazon_v2_data.py`: deterministic no-API synthetic Amazon v2 data generator.
+- `scripts/validate_amazon_v2_data.py`: validates v2 count, sentiment, profile, rating, and evidence constraints before upload.
+- `fixtures/amazon/`: backend source of truth for the large Amazon v2 seed dataset.
 - `drizzle/0000_initial.sql`: reproducible SQL schema migration.
 - `drizzle/0001_amazon_catalog.sql`: Amazon product catalog and review schema migration.
 - `drizzle/0002_amazon_range_indexes.sql`: Amazon range filter indexes.
 - `drizzle/0003_amazon_ai_attributes.sql`: Amazon AI attribute taxonomy/value/evidence schema.
+- `drizzle/0004_amazon_review_intelligence.sql`: Amazon review profile and issue evidence schema.
 
 ## `supabase/`
 
@@ -196,6 +207,8 @@ Initial schema covers:
 - product options
 - product rating breakdowns
 - product reviews
+- product review profiles
+- product review evidence and issue summaries
 - media items
 - media tags
 - media assets
@@ -204,7 +217,7 @@ Initial schema covers:
 - media hero placements
 - interaction logs
 
-AI evidence summaries and AI task tables should be added after the AI request/display contracts are finalized.
+AI task tables should be added after the AI request/display contracts are finalized.
 
 ## Integration Rule
 

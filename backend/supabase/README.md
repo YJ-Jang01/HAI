@@ -17,7 +17,7 @@ Use Supabase as managed Postgres and Node.js as the API layer.
 - Frontend calls Node.js endpoints.
 - Node.js connects to Supabase Postgres with `DATABASE_URL`.
 - `npm run db:migrate` creates tables, constraints, and indexes.
-- `npm run db:seed:amazon` uploads `frontend/Amazon/products.json` and `frontend/Amazon/review.json` into Supabase.
+- `npm run db:seed:amazon` uploads the Amazon v2 fixture from `backend/fixtures/amazon/` into Supabase.
 - `npm run db:seed:netflix` uploads `frontend/Netflix/data.json` into Supabase.
 
 Do not put Supabase service-role keys in frontend code. The browser should not connect directly to the database for this project structure.
@@ -61,7 +61,7 @@ The import command maps the current frontend mock data like this:
 
 The existing Netflix rows are split into five shelves with six items each to match the current demo page layout.
 
-## Upload Amazon Frontend Data
+## Upload Amazon Backend Fixture Data
 
 Run from `backend/`:
 
@@ -71,20 +71,19 @@ npm run db:migrate
 npm run db:seed:amazon
 ```
 
-The import command maps the current frontend mock data like this:
+The import command maps the current backend fixture data like this:
 
-| Frontend JSON | Database |
+| Fixture JSON | Database |
 | --- | --- |
-| `category` | `product_categories` |
-| `subCategory` | `product_subcategories` |
-| `id` | `products.external_id` |
-| `name`, `keyword`, `desc`, `brandStory` | `products` |
-| `price`, `rating`, `reviewCount` | typed numeric/integer columns on `products` |
-| `img`, `descImages[]`, `brandImages[]` | `product_assets` |
-| `features[]` | `product_features` |
-| `sizes[]`, `colors[]` | `product_option_groups`, `product_option_values` |
-| `ratingDetail` | `product_rating_breakdown` |
-| `review.json` rows | `product_reviews` |
+| `products.json.category` | `product_categories` |
+| `products.json.subCategory` | `product_subcategories` |
+| `products.json.id` | `products.external_id` |
+| `products.json` product fields | `products`, `product_assets`, `product_features`, `product_option_groups`, `product_rating_breakdown` |
+| `attribute_taxonomy.json` | `product_attribute_definitions`, `product_attribute_options` |
+| `products.json.attributes` | `product_attribute_values` |
+| `review.json` | `product_reviews` |
+| `review_profiles.json` | `product_review_profiles` |
+| `review_evidence.json` | `product_review_evidence` |
 
 ## Normalization Rule
 

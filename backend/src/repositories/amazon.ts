@@ -14,6 +14,7 @@ import {
   productOptionValues,
   productRatingBreakdown,
   productReviewEvidence,
+  productReviewProfiles,
   productReviews,
   products,
   productSubcategories,
@@ -145,6 +146,20 @@ function serializeAttributeValue(row: {
     return row.valueBoolean;
   }
   return row.valueText;
+}
+
+function serializeEvidenceValue(row: {
+  evidenceValueText: string | null;
+  evidenceValueNumber: string | null;
+  evidenceValueBoolean: boolean | null;
+}) {
+  if (row.evidenceValueNumber !== null) {
+    return toNumber(row.evidenceValueNumber);
+  }
+  if (row.evidenceValueBoolean !== null) {
+    return row.evidenceValueBoolean;
+  }
+  return row.evidenceValueText;
 }
 
 async function getProductAttributes(productId: string) {
@@ -516,6 +531,101 @@ async function getAttributeFacets(productIds: string[]) {
   );
 }
 
+async function getReviewIntelligenceFacets(productIds: string[]) {
+  if (!productIds.length) {
+    return {
+      negativeIssues: [],
+      negativeAttributes: [],
+      reviewerProfiles: {
+        fitResults: [],
+        bodyTypes: [],
+        genders: [],
+      },
+    };
+  }
+
+  const issueRows = await db
+    .select({
+      issueType: productReviewEvidence.issueType,
+      count: count(),
+      averageSeverity: sql<string | null>`avg(${productReviewEvidence.severity})`,
+      affectedProducts: sql<number>`count(distinct ${productReviews.productId})`,
+    })
+    .from(productReviewEvidence)
+    .innerJoin(productReviews, eq(productReviewEvidence.reviewId, productReviews.id))
+    .where(and(inArray(productReviews.productId, productIds), eq(productReviewEvidence.sentiment, "negative"), ne(productReviewEvidence.issueType, "none")))
+    .groupBy(productReviewEvidence.issueType);
+
+  const attributeRows = await db
+    .select({
+      attributeKey: productAttributeDefinitions.key,
+      attributeLabel: productAttributeDefinitions.label,
+      count: count(),
+      averageSeverity: sql<string | null>`avg(${productReviewEvidence.severity})`,
+      affectedProducts: sql<number>`count(distinct ${productReviews.productId})`,
+    })
+    .from(productReviewEvidence)
+    .innerJoin(productReviews, eq(productReviewEvidence.reviewId, productReviews.id))
+    .innerJoin(productAttributeDefinitions, eq(productReviewEvidence.attributeDefinitionId, productAttributeDefinitions.id))
+    .where(and(inArray(productReviews.productId, productIds), eq(productReviewEvidence.sentiment, "negative"), ne(productReviewEvidence.issueType, "none")))
+    .groupBy(productAttributeDefinitions.key, productAttributeDefinitions.label);
+
+  const fitRows = await db
+    .select({
+      fitResult: productReviewProfiles.fitResult,
+      count: count(),
+    })
+    .from(productReviewProfiles)
+    .innerJoin(productReviews, eq(productReviewProfiles.reviewId, productReviews.id))
+    .where(inArray(productReviews.productId, productIds))
+    .groupBy(productReviewProfiles.fitResult);
+
+  const bodyRows = await db
+    .select({
+      bodyType: productReviewProfiles.bodyType,
+      count: count(),
+    })
+    .from(productReviewProfiles)
+    .innerJoin(productReviews, eq(productReviewProfiles.reviewId, productReviews.id))
+    .where(inArray(productReviews.productId, productIds))
+    .groupBy(productReviewProfiles.bodyType);
+
+  const genderRows = await db
+    .select({
+      gender: productReviewProfiles.gender,
+      count: count(),
+    })
+    .from(productReviewProfiles)
+    .innerJoin(productReviews, eq(productReviewProfiles.reviewId, productReviews.id))
+    .where(inArray(productReviews.productId, productIds))
+    .groupBy(productReviewProfiles.gender);
+
+  return {
+    negativeIssues: issueRows
+      .map((row) => ({
+        issueType: row.issueType,
+        count: row.count,
+        averageSeverity: roundNullable(row.averageSeverity),
+        affectedProducts: Number(row.affectedProducts),
+      }))
+      .sort((a, b) => b.count - a.count || b.affectedProducts - a.affectedProducts || a.issueType.localeCompare(b.issueType)),
+    negativeAttributes: attributeRows
+      .map((row) => ({
+        attributeKey: row.attributeKey,
+        attributeLabel: row.attributeLabel,
+        count: row.count,
+        averageSeverity: roundNullable(row.averageSeverity),
+        affectedProducts: Number(row.affectedProducts),
+      }))
+      .sort((a, b) => b.count - a.count || b.affectedProducts - a.affectedProducts || a.attributeKey.localeCompare(b.attributeKey)),
+    reviewerProfiles: {
+      fitResults: fitRows.map((row) => ({ fitResult: row.fitResult, count: row.count })).sort((a, b) => b.count - a.count || a.fitResult.localeCompare(b.fitResult)),
+      bodyTypes: bodyRows.map((row) => ({ bodyType: row.bodyType, count: row.count })).sort((a, b) => b.count - a.count || a.bodyType.localeCompare(b.bodyType)),
+      genders: genderRows.map((row) => ({ gender: row.gender, count: row.count })).sort((a, b) => b.count - a.count || a.gender.localeCompare(b.gender)),
+    },
+  };
+}
+
 export async function searchProducts(params: ProductSearchParams) {
   const site = await getAmazonSite();
   if (!site) {
@@ -569,6 +679,7 @@ export async function getProductFacets(params: ProductFilterParams) {
         reviewCount: null,
       },
       attributes: {},
+      reviewIntelligence: await getReviewIntelligenceFacets([]),
       interpretationBasis: {
         notTooExpensive: null,
         goodReviews: null,
@@ -607,6 +718,7 @@ export async function getProductFacets(params: ProductFilterParams) {
           .where(and(...filters))
       : [];
   const attributeFacets = await getAttributeFacets(matchedProducts.map((product) => product.id));
+  const reviewIntelligence = await getReviewIntelligenceFacets(matchedProducts.map((product) => product.id));
   const p40Price = roundNullable(row?.p40Price);
   const p70Rating = roundNullable(row?.p70Rating, 1);
   const p70ReviewCount = roundNullable(row?.p70ReviewCount, 0);
@@ -648,6 +760,7 @@ export async function getProductFacets(params: ProductFilterParams) {
           : null,
     },
     attributes: attributeFacets,
+    reviewIntelligence,
     interpretationBasis: {
       notTooExpensive: p40Price === null ? null : { field: "price.amount", operator: "<=", value: p40Price, basis: "40th percentile of matched products" },
       goodReviews:
@@ -726,20 +839,34 @@ async function getProductRatingBreakdown(productId: string) {
 
 async function getProductReviews(productId: string, limit: number) {
   const rows = await db
-    .select()
+    .select({
+      review: productReviews,
+      profile: productReviewProfiles,
+    })
     .from(productReviews)
+    .leftJoin(productReviewProfiles, eq(productReviewProfiles.reviewId, productReviews.id))
     .where(eq(productReviews.productId, productId))
     .orderBy(desc(productReviews.reviewDate), asc(productReviews.externalId))
     .limit(limit);
 
-  return rows.map((review) => ({
-    id: review.id,
-    externalId: review.externalId,
-    userName: review.userName,
-    rating: review.rating,
-    date: review.reviewDate,
-    title: review.title,
-    comment: review.body,
+  return rows.map((row) => ({
+    id: row.review.id,
+    externalId: row.review.externalId,
+    userName: row.review.userName,
+    rating: row.review.rating,
+    date: row.review.reviewDate,
+    title: row.review.title,
+    comment: row.review.body,
+    profile: row.profile
+      ? {
+          gender: row.profile.gender,
+          heightCm: row.profile.heightCm,
+          bodyType: row.profile.bodyType,
+          usualSize: row.profile.usualSize,
+          purchasedSize: row.profile.purchasedSize,
+          fitResult: row.profile.fitResult,
+        }
+      : null,
   }));
 }
 
@@ -751,7 +878,12 @@ async function getProductReviewEvidence(productId: string) {
       attributeKey: productAttributeDefinitions.key,
       attributeLabel: productAttributeDefinitions.label,
       sentiment: productReviewEvidence.sentiment,
+      issueType: productReviewEvidence.issueType,
+      severity: productReviewEvidence.severity,
       evidenceText: productReviewEvidence.evidenceText,
+      evidenceValueText: productReviewEvidence.evidenceValueText,
+      evidenceValueNumber: productReviewEvidence.evidenceValueNumber,
+      evidenceValueBoolean: productReviewEvidence.evidenceValueBoolean,
       source: productReviewEvidence.source,
       humanReviewStatus: productReviewEvidence.humanReviewStatus,
     })
@@ -767,7 +899,10 @@ async function getProductReviewEvidence(productId: string) {
     attributeKey: row.attributeKey,
     attributeLabel: row.attributeLabel,
     sentiment: row.sentiment,
+    issueType: row.issueType,
+    severity: row.severity,
     evidenceText: row.evidenceText,
+    evidenceValue: serializeEvidenceValue(row),
     source: row.source,
     humanReviewStatus: row.humanReviewStatus,
   }));
@@ -791,7 +926,7 @@ export async function serializeProductDetail(product: ProductRow) {
     getProductFeatures(product.id),
     getProductOptions(product.id),
     getProductRatingBreakdown(product.id),
-    getProductReviews(product.id, 20),
+    getProductReviews(product.id, 25),
     getProductReviewEvidence(product.id),
     getRelatedProducts(product),
   ]);
@@ -830,7 +965,7 @@ export async function getOrCreateAmazonSite() {
 export async function getLatestAmazonImportCounts() {
   const site = await getAmazonSite();
   if (!site) {
-    return { products: 0, categories: 0, subcategories: 0, reviews: 0, attributes: 0, evidence: 0 };
+    return { products: 0, categories: 0, subcategories: 0, reviews: 0, reviewProfiles: 0, attributes: 0, evidence: 0 };
   }
 
   const [productCount] = await db.select({ value: count() }).from(products).where(eq(products.demoSiteId, site.id));
@@ -843,6 +978,12 @@ export async function getLatestAmazonImportCounts() {
   const [reviewCount] = await db
     .select({ value: count(productReviews.id) })
     .from(productReviews)
+    .innerJoin(products, eq(productReviews.productId, products.id))
+    .where(eq(products.demoSiteId, site.id));
+  const [reviewProfileCount] = await db
+    .select({ value: count(productReviewProfiles.reviewId) })
+    .from(productReviewProfiles)
+    .innerJoin(productReviews, eq(productReviewProfiles.reviewId, productReviews.id))
     .innerJoin(products, eq(productReviews.productId, products.id))
     .where(eq(products.demoSiteId, site.id));
   const [attributeCount] = await db.select({ value: count(productAttributeDefinitions.id) }).from(productAttributeDefinitions).where(eq(productAttributeDefinitions.demoSiteId, site.id));
@@ -858,6 +999,7 @@ export async function getLatestAmazonImportCounts() {
     categories: categoryCount?.value ?? 0,
     subcategories: subcategoryCount?.value ?? 0,
     reviews: reviewCount?.value ?? 0,
+    reviewProfiles: reviewProfileCount?.value ?? 0,
     attributes: attributeCount?.value ?? 0,
     evidence: evidenceCount?.value ?? 0,
   };
