@@ -10,14 +10,16 @@ This directory contains the active shopping-grid demo and is the main implementa
 - `src/styles.css`: Tailwind CSS entry file.
 - `vite.config.js`: Vite config with React and Tailwind plugins.
 - `package.json`: local dev/build scripts.
-- `products.json`: Codex-generated synthetic product metadata with AI-ready attributes.
-- `review.json`: Codex-generated review snippets, five reviews per product.
-- `attribute_taxonomy.json`: attribute definitions/options used by backend filters and AI interpretation.
-- `review_evidence.json`: review-to-attribute evidence snippets for grounded display summaries.
-- `scripts/generate_ai_catalog.py`: deterministic no-API data generator.
-- `scripts/validate_ai_catalog.py`: local validation for product/review/attribute/evidence consistency.
+- `products.json`: small app-local mock product metadata for the current frontend fallback flow.
+- `review.json`: small app-local mock review snippets for the current frontend fallback flow.
+- `attribute_taxonomy.json`: legacy app-local attribute fixture; backend v2 seed no longer reads this file.
+- `review_evidence.json`: legacy app-local evidence fixture; backend v2 seed no longer reads this file.
+- `scripts/generate_ai_catalog.py`: legacy deterministic no-API app-local data generator.
+- `scripts/validate_ai_catalog.py`: legacy local validation for the app-local fallback fixture.
 - `generate_reviews.py`, `generate_picture.py`: legacy app-specific data or asset generation helpers; do not use for the current AI-ready seed data.
 - `picture/`: local image assets.
+
+The large Amazon v2 seed dataset is owned by backend under `backend/fixtures/amazon/`. It contains the API-grounded product attributes, review profiles, issue-tagged evidence, and reviewer-fit data used by Supabase seeding.
 
 ## Current Role
 

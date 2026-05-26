@@ -45,8 +45,8 @@ Current files:
 - `src/App.jsx`: React UI, category/search rendering, filters, detail modal, reviews, and cart state.
 - `src/data.js`: product/review JSON loading and normalization helpers.
 - `src/styles.css`: Tailwind CSS entry file.
-- `products.json`: app-local product data.
-- `review.json`: app-local review data.
+- `products.json`: app-local fallback product data.
+- `review.json`: app-local fallback review data.
 - `picture/`: app-local image assets.
 
 Already implemented:
@@ -59,7 +59,7 @@ Already implemented:
 - AI-style summary area in detail modal
 - cart count/toast
 - React/Vite/Tailwind frontend implementation
-- backend Amazon schema, migration, seed import, and page-data API
+- backend Amazon schema, migration, v2 seed import, review intelligence data, and page-data API
 
 Missing for GroundedCompare:
 
@@ -131,19 +131,20 @@ Already implemented:
 
 ## Data Notes
 
-Keep current data app-local:
+Keep small frontend fallback data app-local, but use backend fixtures as the source of truth when a demo depends on API-backed data.
 
-- `frontend/Amazon/products.json`
-- `frontend/Amazon/review.json`
-- `frontend/Netflix/data.json`
+- `frontend/Amazon/products.json`: frontend fallback fixture only.
+- `frontend/Amazon/review.json`: frontend fallback fixture only.
+- `backend/fixtures/amazon/`: Amazon v2 API seed with products, reviews, review profiles, attribute taxonomy, and issue evidence.
+- `frontend/Netflix/data.json`: Netflix frontend/backend seed source.
 
-Amazon product/review data is now imported into Supabase by `npm run db:seed:amazon`. Before study use, check:
+Amazon product/review data is imported into Supabase by `npm run db:seed:amazon`. Before study use, check:
 
-- product `price` parses as number
-- product `reviewCount` parses as number
-- stable review IDs
-- review content matches the current products
-- review topic tags such as comfort, fit, material, durability, price, shipping after AI evidence requirements are finalized
+- generated product rating matches review rating averages
+- review profile coverage is complete
+- negative and neutral evidence ratios remain high enough for tradeoff comparison
+- evidence text is present in the review body
+- final gold/evaluation rows have human review approval if used for formal evaluation
 
 ## Logging Events Needed
 

@@ -37,7 +37,7 @@ AI-agent-specific APIs are intentionally not defined here yet. Add them after AI
 - Drizzle schema lives in `backend/src/db/schema.ts`.
 - `npm run db:migrate` applies all SQL files in `backend/drizzle/` to Supabase Postgres.
 - `npm run db:seed:netflix` imports `frontend/Netflix/data.json`.
-- `npm run db:seed:amazon` imports `frontend/Amazon/products.json` and `frontend/Amazon/review.json`.
+- `npm run db:seed:amazon` imports the Amazon v2 fixture from `backend/fixtures/amazon/`, including products, reviews, review profiles, attribute taxonomy, and issue-tagged evidence.
 
 ## Rule
 

@@ -388,6 +388,26 @@ export const productReviews = pgTable(
   ],
 );
 
+export const productReviewProfiles = pgTable(
+  "product_review_profiles",
+  {
+    reviewId: uuid("review_id")
+      .primaryKey()
+      .references(() => productReviews.id, { onDelete: "cascade" }),
+    gender: text("gender").notNull(),
+    heightCm: integer("height_cm").notNull(),
+    bodyType: text("body_type").notNull(),
+    usualSize: text("usual_size").notNull(),
+    purchasedSize: text("purchased_size").notNull(),
+    fitResult: text("fit_result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_product_review_profiles_fit_result").on(table.fitResult),
+    index("idx_product_review_profiles_gender_height_body").on(table.gender, table.heightCm, table.bodyType),
+  ],
+);
+
 export const productAttributeDefinitions = pgTable(
   "product_attribute_definitions",
   {
@@ -469,6 +489,11 @@ export const productReviewEvidence = pgTable(
       .references(() => productAttributeDefinitions.id, { onDelete: "cascade" }),
     sentiment: text("sentiment").notNull(),
     evidenceText: text("evidence_text").notNull(),
+    issueType: text("issue_type").notNull().default("none"),
+    severity: integer("severity").notNull().default(0),
+    evidenceValueText: text("evidence_value_text"),
+    evidenceValueNumber: numeric("evidence_value_number", { precision: 12, scale: 2 }),
+    evidenceValueBoolean: boolean("evidence_value_boolean"),
     source: text("source").notNull().default("generated"),
     humanReviewStatus: text("human_review_status").notNull().default("generated"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -476,5 +501,7 @@ export const productReviewEvidence = pgTable(
   (table) => [
     index("idx_product_review_evidence_review").on(table.reviewId),
     index("idx_product_review_evidence_attribute").on(table.attributeDefinitionId),
+    index("idx_product_review_evidence_issue_sentiment_severity").on(table.issueType, table.sentiment, table.severity),
+    index("idx_product_review_evidence_attribute_issue").on(table.attributeDefinitionId, table.issueType),
   ],
 );

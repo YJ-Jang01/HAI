@@ -15,6 +15,7 @@ import {
   productOptionValues,
   productRatingBreakdown,
   productReviewEvidence,
+  productReviewProfiles,
   productReviews,
   products,
   productSubcategories,
@@ -53,6 +54,16 @@ type RawReview = {
   comment: string;
 };
 
+type RawReviewProfile = {
+  reviewId: number;
+  gender: "female" | "male" | "nonbinary" | "prefer_not_to_say";
+  heightCm: number;
+  bodyType: "petite" | "slim" | "average" | "curvy" | "athletic" | "broad_shoulders" | "tall" | "plus";
+  usualSize: string;
+  purchasedSize: string;
+  fitResult: "too_small" | "slightly_small" | "true_to_size" | "slightly_large" | "too_large" | "varies_by_body_type";
+};
+
 type RawAttributeDefinition = {
   key: string;
   label: string;
@@ -75,10 +86,40 @@ type RawReviewEvidence = {
   productId: number;
   attributeKey: string;
   sentiment: "positive" | "neutral" | "negative";
+  issueType?: IssueType;
+  severity?: number;
+  evidenceValueText?: string;
+  evidenceValueNumber?: number;
+  evidenceValueBoolean?: boolean;
   evidenceText: string;
   source?: string;
   humanReviewStatus?: "generated" | "reviewed" | "approved";
 };
+
+type IssueType =
+  | "none"
+  | "sizing_issue"
+  | "too_heavy"
+  | "too_thin"
+  | "too_warm"
+  | "not_breathable"
+  | "scratchy_material"
+  | "color_mismatch"
+  | "wrinkles_easily"
+  | "hard_to_wash"
+  | "shrinks_after_wash"
+  | "weak_durability"
+  | "not_waterproof_enough"
+  | "poor_value_for_price"
+  | "uncomfortable_fit";
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
 
 function requireString(value: unknown, field: string, index: number) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -184,6 +225,59 @@ function validateReviews(value: unknown, productIds: Set<number>): RawReview[] {
   });
 }
 
+function validateReviewProfiles(value: unknown, reviewIds: Set<number>): RawReviewProfile[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Amazon review profile data must be a JSON array.");
+  }
+
+  const ids = new Set<number>();
+  const genders = new Set(["female", "male", "nonbinary", "prefer_not_to_say"]);
+  const bodyTypes = new Set(["petite", "slim", "average", "curvy", "athletic", "broad_shoulders", "tall", "plus"]);
+  const fitResults = new Set(["too_small", "slightly_small", "true_to_size", "slightly_large", "too_large", "varies_by_body_type"]);
+
+  return value.map((item, index) => {
+    const candidate = item as Partial<RawReviewProfile>;
+    const reviewId = Number(candidate.reviewId);
+    const gender = String(candidate.gender);
+    const bodyType = String(candidate.bodyType);
+    const fitResult = String(candidate.fitResult);
+    const heightCm = Number(candidate.heightCm);
+
+    if (!Number.isInteger(reviewId) || reviewId <= 0) {
+      throw new Error(`Review profile at index ${index} has an invalid reviewId.`);
+    }
+    if (ids.has(reviewId)) {
+      throw new Error(`Duplicate review profile for review ${reviewId}.`);
+    }
+    ids.add(reviewId);
+    if (!reviewIds.has(reviewId)) {
+      throw new Error(`Review profile ${reviewId} references missing review.`);
+    }
+    if (!genders.has(gender)) {
+      throw new Error(`Review profile ${reviewId} has invalid gender ${gender}.`);
+    }
+    if (!bodyTypes.has(bodyType)) {
+      throw new Error(`Review profile ${reviewId} has invalid bodyType ${bodyType}.`);
+    }
+    if (!fitResults.has(fitResult)) {
+      throw new Error(`Review profile ${reviewId} has invalid fitResult ${fitResult}.`);
+    }
+    if (!Number.isInteger(heightCm) || heightCm < 140 || heightCm > 210) {
+      throw new Error(`Review profile ${reviewId} has invalid heightCm ${String(candidate.heightCm)}.`);
+    }
+
+    return {
+      reviewId,
+      gender: gender as RawReviewProfile["gender"],
+      heightCm,
+      bodyType: bodyType as RawReviewProfile["bodyType"],
+      usualSize: requireString(candidate.usualSize, "usualSize", index),
+      purchasedSize: requireString(candidate.purchasedSize, "purchasedSize", index),
+      fitResult: fitResult as RawReviewProfile["fitResult"],
+    };
+  });
+}
+
 function validateAttributeTaxonomy(value: unknown): RawAttributeDefinition[] {
   if (!Array.isArray(value)) {
     throw new Error("Amazon attribute taxonomy must be a JSON array.");
@@ -268,6 +362,23 @@ function validateReviewEvidence(value: unknown, reviewIds: Set<number>, productI
   const ids = new Set<number>();
   const sentiments = new Set(["positive", "neutral", "negative"]);
   const statuses = new Set(["generated", "reviewed", "approved"]);
+  const issueTypes = new Set<IssueType>([
+    "none",
+    "sizing_issue",
+    "too_heavy",
+    "too_thin",
+    "too_warm",
+    "not_breathable",
+    "scratchy_material",
+    "color_mismatch",
+    "wrinkles_easily",
+    "hard_to_wash",
+    "shrinks_after_wash",
+    "weak_durability",
+    "not_waterproof_enough",
+    "poor_value_for_price",
+    "uncomfortable_fit",
+  ]);
   return value.map((item, index) => {
     const candidate = item as Partial<RawReviewEvidence>;
     const id = Number(candidate.id);
@@ -275,6 +386,8 @@ function validateReviewEvidence(value: unknown, reviewIds: Set<number>, productI
     const productId = Number(candidate.productId);
     const sentiment = String(candidate.sentiment);
     const status = candidate.humanReviewStatus ?? "generated";
+    const issueType = (candidate.issueType ?? "none") as IssueType;
+    const severity = Number(candidate.severity ?? 0);
 
     if (!Number.isInteger(id) || id <= 0) {
       throw new Error(`Evidence at index ${index} has an invalid id.`);
@@ -298,6 +411,24 @@ function validateReviewEvidence(value: unknown, reviewIds: Set<number>, productI
     if (!statuses.has(status)) {
       throw new Error(`Evidence ${id} has invalid humanReviewStatus ${status}.`);
     }
+    if (!issueTypes.has(issueType)) {
+      throw new Error(`Evidence ${id} has invalid issueType ${String(candidate.issueType)}.`);
+    }
+    if (!Number.isInteger(severity) || severity < 0 || severity > 5) {
+      throw new Error(`Evidence ${id} has invalid severity ${String(candidate.severity)}.`);
+    }
+    if (sentiment === "negative" && issueType === "none") {
+      throw new Error(`Evidence ${id} is negative but issueType is none.`);
+    }
+
+    const typedValueCount = [
+      candidate.evidenceValueText !== undefined,
+      candidate.evidenceValueNumber !== undefined,
+      candidate.evidenceValueBoolean !== undefined,
+    ].filter(Boolean).length;
+    if (typedValueCount > 1) {
+      throw new Error(`Evidence ${id} has multiple typed evidence values.`);
+    }
 
     return {
       id,
@@ -305,6 +436,11 @@ function validateReviewEvidence(value: unknown, reviewIds: Set<number>, productI
       productId,
       attributeKey: requireString(candidate.attributeKey, "attributeKey", index),
       sentiment: sentiment as RawReviewEvidence["sentiment"],
+      issueType,
+      severity,
+      evidenceValueText: typeof candidate.evidenceValueText === "string" ? candidate.evidenceValueText : undefined,
+      evidenceValueNumber: candidate.evidenceValueNumber === undefined ? undefined : Number(candidate.evidenceValueNumber),
+      evidenceValueBoolean: typeof candidate.evidenceValueBoolean === "boolean" ? candidate.evidenceValueBoolean : undefined,
       evidenceText: requireString(candidate.evidenceText, "evidenceText", index),
       source: typeof candidate.source === "string" ? candidate.source.trim() : "generated",
       humanReviewStatus: status,
@@ -314,11 +450,13 @@ function validateReviewEvidence(value: unknown, reviewIds: Set<number>, productI
 
 async function main() {
   const currentDir = dirname(fileURLToPath(import.meta.url));
-  const repoRoot = resolve(currentDir, "../../..");
-  const productsPath = resolve(repoRoot, "frontend/Amazon/products.json");
-  const reviewsPath = resolve(repoRoot, "frontend/Amazon/review.json");
-  const taxonomyPath = resolve(repoRoot, "frontend/Amazon/attribute_taxonomy.json");
-  const evidencePath = resolve(repoRoot, "frontend/Amazon/review_evidence.json");
+  const backendRoot = resolve(currentDir, "../..");
+  const fixtureRoot = resolve(backendRoot, "fixtures/amazon");
+  const productsPath = resolve(fixtureRoot, "products.json");
+  const reviewsPath = resolve(fixtureRoot, "review.json");
+  const profilesPath = resolve(fixtureRoot, "review_profiles.json");
+  const taxonomyPath = resolve(fixtureRoot, "attribute_taxonomy.json");
+  const evidencePath = resolve(fixtureRoot, "review_evidence.json");
 
   const rawProducts = validateProducts(JSON.parse(await readFile(productsPath, "utf-8")));
   const rawTaxonomy = validateAttributeTaxonomy(JSON.parse(await readFile(taxonomyPath, "utf-8")));
@@ -327,6 +465,13 @@ async function main() {
     JSON.parse(await readFile(reviewsPath, "utf-8")),
     new Set(rawProducts.map((product) => product.id)),
   );
+  const rawProfiles = validateReviewProfiles(
+    JSON.parse(await readFile(profilesPath, "utf-8")),
+    new Set(rawReviews.map((review) => review.id)),
+  );
+  if (rawProfiles.length < rawReviews.length) {
+    throw new Error(`Amazon review profile data has ${rawProfiles.length} rows for ${rawReviews.length} reviews.`);
+  }
   const rawEvidence = validateReviewEvidence(
     JSON.parse(await readFile(evidencePath, "utf-8")),
     new Set(rawReviews.map((review) => review.id)),
@@ -554,57 +699,92 @@ async function main() {
 
   const reviewIds = new Map<number, string>();
   if (rawReviews.length) {
-    const insertedReviews = await db.insert(productReviews).values(
-      rawReviews.map((review) => {
-        const productId = productIds.get(review.productId);
-        if (!productId) {
-          throw new Error(`Review ${review.id} references missing product ${review.productId}.`);
-        }
+    for (const reviewBatch of chunk(rawReviews, 1000)) {
+      const insertedReviews = await db
+        .insert(productReviews)
+        .values(
+          reviewBatch.map((review) => {
+            const productId = productIds.get(review.productId);
+            if (!productId) {
+              throw new Error(`Review ${review.id} references missing product ${review.productId}.`);
+            }
 
-        return {
-          productId,
-          externalId: review.id,
-          userName: review.userName,
-          rating: review.rating,
-          reviewDate: review.date,
-          title: review.title,
-          body: review.comment,
-        };
-      }),
-    ).returning({ id: productReviews.id, externalId: productReviews.externalId });
+            return {
+              productId,
+              externalId: review.id,
+              userName: review.userName,
+              rating: review.rating,
+              reviewDate: review.date,
+              title: review.title,
+              body: review.comment,
+            };
+          }),
+        )
+        .returning({ id: productReviews.id, externalId: productReviews.externalId });
 
-    for (const review of insertedReviews) {
-      reviewIds.set(review.externalId, review.id);
+      for (const review of insertedReviews) {
+        reviewIds.set(review.externalId, review.id);
+      }
+    }
+  }
+
+  if (rawProfiles.length) {
+    for (const profileBatch of chunk(rawProfiles, 1000)) {
+      await db.insert(productReviewProfiles).values(
+        profileBatch.map((profile) => {
+          const reviewId = reviewIds.get(profile.reviewId);
+          if (!reviewId) {
+            throw new Error(`Review profile ${profile.reviewId} references missing inserted review.`);
+          }
+
+          return {
+            reviewId,
+            gender: profile.gender,
+            heightCm: profile.heightCm,
+            bodyType: profile.bodyType,
+            usualSize: profile.usualSize,
+            purchasedSize: profile.purchasedSize,
+            fitResult: profile.fitResult,
+          };
+        }),
+      );
     }
   }
 
   if (rawEvidence.length) {
-    await db.insert(productReviewEvidence).values(
-      rawEvidence.map((evidence) => {
-        const reviewId = reviewIds.get(evidence.reviewId);
-        const definition = attributeDefinitions.get(evidence.attributeKey);
-        if (!reviewId) {
-          throw new Error(`Evidence ${evidence.id} references missing inserted review ${evidence.reviewId}.`);
-        }
-        if (!definition) {
-          throw new Error(`Evidence ${evidence.id} references missing inserted attribute ${evidence.attributeKey}.`);
-        }
+    for (const evidenceBatch of chunk(rawEvidence, 1000)) {
+      await db.insert(productReviewEvidence).values(
+        evidenceBatch.map((evidence) => {
+          const reviewId = reviewIds.get(evidence.reviewId);
+          const definition = attributeDefinitions.get(evidence.attributeKey);
+          if (!reviewId) {
+            throw new Error(`Evidence ${evidence.id} references missing inserted review ${evidence.reviewId}.`);
+          }
+          if (!definition) {
+            throw new Error(`Evidence ${evidence.id} references missing inserted attribute ${evidence.attributeKey}.`);
+          }
 
-        return {
-          reviewId,
-          attributeDefinitionId: definition.id,
-          sentiment: evidence.sentiment,
-          evidenceText: evidence.evidenceText,
-          source: evidence.source || "generated",
-          humanReviewStatus: evidence.humanReviewStatus || "generated",
-        };
-      }),
-    );
+          return {
+            reviewId,
+            attributeDefinitionId: definition.id,
+            sentiment: evidence.sentiment,
+            evidenceText: evidence.evidenceText,
+            issueType: evidence.issueType || "none",
+            severity: evidence.severity ?? 0,
+            evidenceValueText: evidence.evidenceValueText ?? null,
+            evidenceValueNumber: evidence.evidenceValueNumber === undefined ? null : evidence.evidenceValueNumber.toFixed(2),
+            evidenceValueBoolean: evidence.evidenceValueBoolean ?? null,
+            source: evidence.source || "generated",
+            humanReviewStatus: evidence.humanReviewStatus || "generated",
+          };
+        }),
+      );
+    }
   }
 
   const counts = await getLatestAmazonImportCounts();
   console.log(
-    `Imported ${counts.products} products, ${counts.categories} categories, ${counts.subcategories} subcategories, ${counts.reviews} reviews, ${counts.attributes} attributes, and ${counts.evidence} evidence rows into amazon.`,
+    `Imported ${counts.products} products, ${counts.categories} categories, ${counts.subcategories} subcategories, ${counts.reviews} reviews, ${counts.reviewProfiles} review profiles, ${counts.attributes} attributes, and ${counts.evidence} evidence rows into amazon.`,
   );
 }
 

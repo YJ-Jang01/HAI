@@ -10,20 +10,23 @@
 
 This API stores the Amazon shopping demo catalog in normalized Postgres tables and returns UI-ready product data for the frontend.
 
-The current frontend data files are:
+The current backend seed fixture files are:
 
-- `frontend/Amazon/products.json`
-- `frontend/Amazon/review.json`
-- `frontend/Amazon/attribute_taxonomy.json`
-- `frontend/Amazon/review_evidence.json`
+- `backend/fixtures/amazon/products.json`
+- `backend/fixtures/amazon/review.json`
+- `backend/fixtures/amazon/review_profiles.json`
+- `backend/fixtures/amazon/attribute_taxonomy.json`
+- `backend/fixtures/amazon/review_evidence.json`
 
-Reviews may be replaced later by the frontend team. The backend assumes the same review fields:
+The fixture is synthetic demo data: at least 400 products, 10,000 reviews, 10,000 review profiles, and 50,000 evidence rows. Frontend-local JSON is no longer the source of truth for backend seeding.
+
+Reviews may be replaced later by the frontend team. The backend assumes the same base review fields:
 
 ```text
 id, productId, userName, rating, date, title, comment
 ```
 
-AI-specific task tables are intentionally not included yet. The catalog now includes AI-ready product attributes and review evidence so agents can translate natural-language requests into objective API filters and cite grounded review snippets.
+AI-specific task tables are intentionally not included yet. The catalog includes AI-ready product attributes, review profiles, and issue-tagged review evidence so the NL request agent can translate natural-language requests into objective API filters while the backend returns evidence summaries for display.
 
 ## Schema Diagram
 
@@ -49,6 +52,7 @@ erDiagram
   product_attribute_definitions ||--o{ product_attribute_values : typed_by
   product_attribute_options ||--o{ product_attribute_values : selected_by
   product_reviews ||--o{ product_review_evidence : cites
+  product_reviews ||--|| product_review_profiles : profiles
   product_attribute_definitions ||--o{ product_review_evidence : explains
 
   demo_sites {
@@ -141,6 +145,17 @@ erDiagram
     timestamptz created_at
   }
 
+  product_review_profiles {
+    uuid review_id PK
+    text gender
+    int height_cm
+    text body_type
+    text usual_size
+    text purchased_size
+    text fit_result
+    timestamptz created_at
+  }
+
   product_attribute_definitions {
     uuid id PK
     uuid demo_site_id FK
@@ -181,7 +196,12 @@ erDiagram
     uuid review_id FK
     uuid attribute_definition_id FK
     text sentiment
+    text issue_type
+    int severity
     text evidence_text
+    text evidence_value_text
+    numeric evidence_value_number
+    boolean evidence_value_boolean
     text source
     text human_review_status
   }
@@ -217,7 +237,7 @@ erDiagram
 | `demo_site_id` | uuid | references `demo_sites(id)`, not null | Demo site that owns this product. |
 | `category_id` | uuid | references `product_categories(id)`, not null | Product's main category. |
 | `subcategory_id` | uuid | references `product_subcategories(id)`, not null | Product's subcategory. |
-| `external_id` | integer | not null, unique with `demo_site_id` | Stable ID from `products.json`; useful for frontend migration. |
+| `external_id` | integer | not null, unique with `demo_site_id` | Stable ID from fixture `products.json`; useful for frontend migration. |
 | `slug` | text | not null, unique with `demo_site_id` | Human-readable API lookup key. |
 | `name` | text | not null | Product display name. |
 | `keyword` | text | nullable | Search seed keyword from mock data. |
@@ -282,12 +302,25 @@ erDiagram
 | --- | --- | --- | --- |
 | `id` | uuid | primary key | Internal review identifier used by future evidence citations. |
 | `product_id` | uuid | references `products(id)`, not null | Product being reviewed. |
-| `external_id` | integer | not null, unique with `product_id` | Stable ID from `review.json`. |
+| `external_id` | integer | not null, unique with `product_id` | Stable ID from fixture `review.json`. |
 | `user_name` | text | not null | Review author display name. |
 | `rating` | integer | not null, `1..5` | Review star rating. |
 | `review_date` | date | not null | Review date. |
 | `title` | text | not null | Review title. |
 | `body` | text | not null | Review text. |
+| `created_at` | timestamptz | not null | Insert timestamp. |
+
+### `product_review_profiles`
+
+| Column | Type | Constraint | Description |
+| --- | --- | --- | --- |
+| `review_id` | uuid | primary key, references `product_reviews(id)` | Review that owns this reviewer profile. |
+| `gender` | text | not null | Synthetic reviewer gender: `female`, `male`, `nonbinary`, or `prefer_not_to_say`. |
+| `height_cm` | integer | not null | Synthetic reviewer height used for fit/body summaries. |
+| `body_type` | text | not null | Synthetic body profile such as `petite`, `average`, `curvy`, `broad_shoulders`, or `plus`. |
+| `usual_size` | text | not null | Reviewer usual size. |
+| `purchased_size` | text | not null | Size selected for this product. |
+| `fit_result` | text | not null | Fit result such as `true_to_size`, `slightly_small`, or `varies_by_body_type`. |
 | `created_at` | timestamptz | not null | Insert timestamp. |
 
 ### `product_attribute_definitions`
@@ -341,7 +374,12 @@ erDiagram
 | `review_id` | uuid | references `product_reviews(id)`, not null | Review that contains the evidence. |
 | `attribute_definition_id` | uuid | references `product_attribute_definitions(id)`, not null | Attribute supported by this review snippet. |
 | `sentiment` | text | not null | `positive`, `neutral`, or `negative`. |
+| `issue_type` | text | not null | Structured issue key for negative evidence, or `none`. |
+| `severity` | integer | not null | Issue severity from `0` to `5`; positive evidence uses `0`. |
 | `evidence_text` | text | not null | Short snippet grounded in the review text. |
+| `evidence_value_text` | text | nullable | Optional text/enum value associated with the evidence. |
+| `evidence_value_number` | numeric(12,2) | nullable | Optional numeric value associated with the evidence. |
+| `evidence_value_boolean` | boolean | nullable | Optional boolean value associated with the evidence. |
 | `source` | text | not null | Source label, currently `generated`. |
 | `human_review_status` | text | not null | `generated`, `reviewed`, or `approved`. |
 | `created_at` | timestamptz | not null | Insert timestamp. |
@@ -408,6 +446,18 @@ on product_attribute_values (attribute_definition_id, option_id);
 
 create index idx_product_review_evidence_review
 on product_review_evidence (review_id);
+
+create index idx_product_review_profiles_fit_result
+on product_review_profiles (fit_result);
+
+create index idx_product_review_profiles_gender_height_body
+on product_review_profiles (gender, height_cm, body_type);
+
+create index idx_product_review_evidence_issue_sentiment_severity
+on product_review_evidence (issue_type, sentiment, severity);
+
+create index idx_product_review_evidence_attribute_issue
+on product_review_evidence (attribute_definition_id, issue_type);
 ```
 
 These indexes target the current frontend paths:
@@ -417,7 +467,7 @@ These indexes target the current frontend paths:
 - cursor pagination by `external_id`
 - AI range filtering by price, rating, and review count
 - AI attribute filtering by numeric, boolean, and enum attribute values
-- review evidence loading for grounded display summaries
+- review profile and issue evidence loading for grounded display summaries
 - product detail asset/feature/option/review loading
 - future AI retrieval by stable product/review references
 
@@ -593,14 +643,14 @@ Example response:
   "pagination": {
     "limit": 24,
     "nextCursor": null,
-    "total": 200
+    "total": 400
   }
 }
 ```
 
 ## `GET /api/demos/amazon/products/facets`
 
-Returns numeric range summaries for the current candidate set. Use this before applying subjective range phrases so the AI can make objective, data-grounded interpretations.
+Returns numeric range summaries, attribute facets, and review intelligence summaries for the current candidate set. Use this before applying subjective range phrases so the NL request agent can make objective, data-grounded interpretations and the display agent can expose common tradeoffs.
 
 ```text
 GET /api/demos/amazon/products/facets?query=coat&category=outerwear
@@ -691,6 +741,45 @@ Example response:
       ]
     }
   },
+  "reviewIntelligence": {
+    "negativeIssues": [
+      {
+        "issueType": "uncomfortable_fit",
+        "count": 42,
+        "averageSeverity": 3.64,
+        "affectedProducts": 18
+      }
+    ],
+    "negativeAttributes": [
+      {
+        "attributeKey": "comfortLevel",
+        "attributeLabel": "Comfort Level",
+        "count": 38,
+        "averageSeverity": 3.5,
+        "affectedProducts": 17
+      }
+    ],
+    "reviewerProfiles": {
+      "fitResults": [
+        {
+          "fitResult": "true_to_size",
+          "count": 210
+        }
+      ],
+      "bodyTypes": [
+        {
+          "bodyType": "average",
+          "count": 90
+        }
+      ],
+      "genders": [
+        {
+          "gender": "female",
+          "count": 120
+        }
+      ]
+    }
+  },
   "interpretationBasis": {
     "notTooExpensive": {
       "field": "price.amount",
@@ -720,11 +809,12 @@ AI use:
 
 - Use this endpoint to ground range-like natural language in the current product set.
 - The AI display should expose the resolved rule to the user, for example: `not too expensive = price <= 99.99, based on the lower 40% of matching products`.
-- The backend returns numeric and attribute summaries only; it does not decide the user's final priority.
+- The backend returns numeric, attribute, negative issue, and reviewer-profile summaries; it does not decide the user's final priority.
+- The NL request agent should not pre-read evidence. It should request candidate sets and evidence summaries from this endpoint.
 
 ## `GET /api/demos/amazon/products/{productId}`
 
-Returns full product detail data for one product. `productId` can be the internal UUID, the slug, or the numeric `externalId` from `products.json`.
+Returns full product detail data for one product. `productId` can be the internal UUID, the slug, or the numeric `externalId` from fixture `products.json`.
 
 ```text
 GET /api/demos/amazon/products/1
@@ -737,6 +827,25 @@ Relevant response fields:
 
 ```json
 {
+  "reviews": [
+    {
+      "id": "uuid",
+      "externalId": 1,
+      "userName": "Minji",
+      "rating": 3,
+      "date": "2025-02-10",
+      "title": "장단점이 확실해서 조건을 봐야 합니다",
+      "comment": "review text",
+      "profile": {
+        "gender": "female",
+        "heightCm": 170,
+        "bodyType": "average",
+        "usualSize": "M",
+        "purchasedSize": "M",
+        "fitResult": "true_to_size"
+      }
+    }
+  ],
   "attributes": [
     {
       "key": "warmthLevel",
@@ -756,7 +865,10 @@ Relevant response fields:
       "attributeKey": "warmthLevel",
       "attributeLabel": "Warmth Level",
       "sentiment": "positive",
+      "issueType": "none",
+      "severity": 0,
       "evidenceText": "보온감은 5/5 수준이라 계절 선택 기준을 세우기 쉽습니다",
+      "evidenceValue": 5,
       "source": "generated",
       "humanReviewStatus": "generated"
     }
@@ -804,12 +916,16 @@ Common codes:
 
 ## AI Feature Notes
 
-The current schema supports API-grounded AI product selection:
+The current schema supports API-grounded AI product selection without RAG/vector search:
 
 - Natural-language selection can refer to `products.id`, `externalId`, category slugs, and visible product order.
 - Evidence display can cite `product_reviews.id` and `product_reviews.external_id`.
+- The NL request agent should translate user language into structured product filters and requested evidence types; it should not scan all review evidence before making the backend request.
+- The backend is responsible for filtering candidates, loading reviews, and aggregating negative issue/profile summaries.
+- The display agent is responsible for turning backend result/evidence payloads into overlays, comparison tray entries, and uncertainty cues.
 - Range-aware AI interpretation should call `GET /products/facets` first, expose the numeric rule to the user, then call `GET /products` with explicit range filters.
 - Range judgments must be grounded in API data such as `price.amount`, `rating`, and `reviewCount`; the AI should not invent thresholds that are not visible in the response contract.
-- Attribute judgments must use `product_attribute_definitions.key` values such as `warmthLevel`, `waterproof`, `material`, and `weightGrams`.
-- Review evidence should cite `product_review_evidence` snippets instead of inventing review claims.
+- Attribute judgments must use `product_attribute_definitions.key` values such as `warmthLevel`, `genderTarget`, `breathabilityLevel`, `shoulderStructure`, and `weightGrams`.
+- Review and weakness summaries should cite `product_review_evidence` snippets and `issueType` values instead of inventing review claims.
+- Fit/body claims should use `product_review_profiles` fields such as `heightCm`, `bodyType`, `purchasedSize`, and `fitResult`.
 - AI-generated summaries should not overwrite `products.description`; store generated outputs separately once the AI display contract is stable.
