@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -94,6 +94,14 @@ type RawReviewEvidence = {
   evidenceText: string;
   source?: string;
   humanReviewStatus?: "generated" | "reviewed" | "approved";
+};
+
+type RawAmazonBatch = {
+  batchId?: string;
+  products?: unknown[];
+  reviews?: unknown[];
+  reviewProfiles?: unknown[];
+  reviewEvidence?: unknown[];
 };
 
 type IssueType =
@@ -448,36 +456,70 @@ function validateReviewEvidence(value: unknown, reviewIds: Set<number>, productI
   });
 }
 
+async function loadHumanAuthoredAmazonFixture(fixtureRoot: string) {
+  const taxonomyPath = resolve(fixtureRoot, "attribute_taxonomy.json");
+  const batchesRoot = resolve(fixtureRoot, "batches");
+  const batchFiles = (await readdir(batchesRoot)).filter((file) => /^batch-.+\.json$/.test(file)).sort();
+
+  if (!batchFiles.length) {
+    throw new Error(`No Amazon human-authored batch files found in ${batchesRoot}.`);
+  }
+
+  const productsData: unknown[] = [];
+  const reviewsData: unknown[] = [];
+  const profilesData: unknown[] = [];
+  const evidenceData: unknown[] = [];
+
+  for (const file of batchFiles) {
+    const batch = JSON.parse(await readFile(resolve(batchesRoot, file), "utf-8")) as RawAmazonBatch;
+    if (!Array.isArray(batch.products) || !Array.isArray(batch.reviews) || !Array.isArray(batch.reviewProfiles) || !Array.isArray(batch.reviewEvidence)) {
+      throw new Error(`Amazon batch ${file} must include products, reviews, reviewProfiles, and reviewEvidence arrays.`);
+    }
+
+    productsData.push(...batch.products);
+    reviewsData.push(...batch.reviews);
+    profilesData.push(...batch.reviewProfiles);
+    evidenceData.push(...batch.reviewEvidence);
+  }
+
+  return {
+    taxonomyData: JSON.parse(await readFile(taxonomyPath, "utf-8")),
+    productsData,
+    reviewsData,
+    profilesData,
+    evidenceData,
+    batchCount: batchFiles.length,
+  };
+}
+
 async function main() {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const backendRoot = resolve(currentDir, "../..");
-  const fixtureRoot = resolve(backendRoot, "fixtures/amazon");
-  const productsPath = resolve(fixtureRoot, "products.json");
-  const reviewsPath = resolve(fixtureRoot, "review.json");
-  const profilesPath = resolve(fixtureRoot, "review_profiles.json");
-  const taxonomyPath = resolve(fixtureRoot, "attribute_taxonomy.json");
-  const evidencePath = resolve(fixtureRoot, "review_evidence.json");
+  const fixtureRoot = resolve(backendRoot, "fixtures/amazon-human");
+  const fixture = await loadHumanAuthoredAmazonFixture(fixtureRoot);
 
-  const rawProducts = validateProducts(JSON.parse(await readFile(productsPath, "utf-8")));
-  const rawTaxonomy = validateAttributeTaxonomy(JSON.parse(await readFile(taxonomyPath, "utf-8")));
+  const rawProducts = validateProducts(fixture.productsData);
+  const rawTaxonomy = validateAttributeTaxonomy(fixture.taxonomyData);
   validateProductAttributes(rawProducts, rawTaxonomy);
   const rawReviews = validateReviews(
-    JSON.parse(await readFile(reviewsPath, "utf-8")),
+    fixture.reviewsData,
     new Set(rawProducts.map((product) => product.id)),
   );
   const rawProfiles = validateReviewProfiles(
-    JSON.parse(await readFile(profilesPath, "utf-8")),
+    fixture.profilesData,
     new Set(rawReviews.map((review) => review.id)),
   );
   if (rawProfiles.length < rawReviews.length) {
     throw new Error(`Amazon review profile data has ${rawProfiles.length} rows for ${rawReviews.length} reviews.`);
   }
   const rawEvidence = validateReviewEvidence(
-    JSON.parse(await readFile(evidencePath, "utf-8")),
+    fixture.evidenceData,
     new Set(rawReviews.map((review) => review.id)),
     new Set(rawProducts.map((product) => product.id)),
     new Set(rawTaxonomy.map((definition) => definition.key)),
   );
+
+  console.log(`Loaded ${fixture.batchCount} human-authored Amazon batch file(s).`);
 
   const site = await getOrCreateAmazonSite();
   await clearAmazonCatalog(site.id);

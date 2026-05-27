@@ -12,13 +12,11 @@ This API stores the Amazon shopping demo catalog in normalized Postgres tables a
 
 The current backend seed fixture files are:
 
-- `backend/fixtures/amazon/products.json`
-- `backend/fixtures/amazon/review.json`
-- `backend/fixtures/amazon/review_profiles.json`
-- `backend/fixtures/amazon/attribute_taxonomy.json`
-- `backend/fixtures/amazon/review_evidence.json`
+- `backend/fixtures/amazon-human/attribute_taxonomy.json`
+- `backend/fixtures/amazon-human/batches/batch-*.json`
+- `backend/fixtures/amazon-human/PROGRESS.md`
 
-The fixture is synthetic demo data: at least 400 products, 10,000 reviews, 10,000 review profiles, and 50,000 evidence rows. Frontend-local JSON is no longer the source of truth for backend seeding.
+The current fixture is a batch-authored dataset. The previous mechanical 400-product/10,000-review generated fixture was removed. As of the current progress log, Supabase contains only the completed human-authored batches.
 
 Reviews may be replaced later by the frontend team. The backend assumes the same base review fields:
 
@@ -643,7 +641,7 @@ Example response:
   "pagination": {
     "limit": 24,
     "nextCursor": null,
-    "total": 400
+    "total": 6
   }
 }
 ```
