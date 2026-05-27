@@ -75,7 +75,7 @@ Verified results:
 - `drizzle/0003_amazon_ai_attributes.sql` was applied successfully.
 - `drizzle/0004_amazon_review_intelligence.sql` was applied successfully.
 - Netflix seed import completed with 30 media items, 3 tags, and 5 shelves.
-- Amazon seed import completed with 400 products, 6 categories, 36 subcategories, 10,000 reviews, 10,000 review profiles, 40 AI attributes, and 50,000 evidence rows.
+- Amazon seed import completed with the current human-authored batches: 6 products, 5 categories, 6 subcategories, 18 reviews, 18 review profiles, 21 AI attributes, and 72 evidence rows.
 - `GET /health` returned `{ "ok": true }`.
 - `GET /api/demos/netflix/home` returned Supabase-backed Netflix home data.
 - `GET /api/demos/amazon/home` returned Supabase-backed Amazon category data.
@@ -141,10 +141,9 @@ Frontend verification:
 - `src/repositories/`: query and serialization logic.
 - `src/scripts/migrate.ts`: applies all SQL files in `drizzle/` in filename order.
 - `src/scripts/seed-netflix.ts`: imports `frontend/Netflix/data.json` into normalized tables.
-- `src/scripts/seed-amazon.ts`: imports `fixtures/amazon/products.json`, `review.json`, `review_profiles.json`, `attribute_taxonomy.json`, and `review_evidence.json` into normalized tables.
-- `scripts/generate_amazon_v2_data.py`: deterministic no-API synthetic Amazon v2 data generator.
-- `scripts/validate_amazon_v2_data.py`: validates v2 count, sentiment, profile, rating, and evidence constraints before upload.
-- `fixtures/amazon/`: backend source of truth for the large Amazon v2 seed dataset.
+- `src/scripts/seed-amazon.ts`: imports all human-authored batch files from `fixtures/amazon-human/batches/`.
+- `scripts/validate_amazon_human_batches.py`: validates human-authored batch references, profile coverage, evidence fields, and evidence text grounding.
+- `fixtures/amazon-human/`: backend source of truth for the Amazon human-authored seed dataset and progress log.
 - `drizzle/0000_initial.sql`: reproducible SQL schema migration.
 - `drizzle/0001_amazon_catalog.sql`: Amazon product catalog and review schema migration.
 - `drizzle/0002_amazon_range_indexes.sql`: Amazon range filter indexes.

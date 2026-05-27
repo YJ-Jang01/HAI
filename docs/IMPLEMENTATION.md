@@ -59,7 +59,7 @@ Already implemented:
 - AI-style summary area in detail modal
 - cart count/toast
 - React/Vite/Tailwind frontend implementation
-- backend Amazon schema, migration, v2 seed import, review intelligence data, and page-data API
+- backend Amazon schema, migration, human-authored batch seed import, review intelligence data, and page-data API
 
 Missing for GroundedCompare:
 
@@ -135,7 +135,7 @@ Keep small frontend fallback data app-local, but use backend fixtures as the sou
 
 - `frontend/Amazon/products.json`: frontend fallback fixture only.
 - `frontend/Amazon/review.json`: frontend fallback fixture only.
-- `backend/fixtures/amazon/`: Amazon v2 API seed with products, reviews, review profiles, attribute taxonomy, and issue evidence.
+- `backend/fixtures/amazon-human/`: Amazon human-authored batch seed with products, reviews, review profiles, attribute taxonomy, issue evidence, and progress log.
 - `frontend/Netflix/data.json`: Netflix frontend/backend seed source.
 
 Amazon product/review data is imported into Supabase by `npm run db:seed:amazon`. Before study use, check:

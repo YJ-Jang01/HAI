@@ -32,7 +32,7 @@ Frontend implements the two demo pages and the mock data needed to make them usa
   - `frontend/Amazon/products.json`
   - `frontend/Amazon/review.json`
   - `frontend/Netflix/data.json`
-- Amazon's large API-backed v2 dataset lives in `backend/fixtures/amazon/`; frontend app-local Amazon JSON is a fallback/mock fixture, not the backend seed source.
+- Amazon's API-backed dataset lives in `backend/fixtures/amazon-human/` as directly authored batch files; frontend app-local Amazon JSON is a fallback/mock fixture, not the backend seed source.
 - UI states for:
   - baseline browsing
   - chat-only AI
