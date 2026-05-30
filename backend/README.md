@@ -39,6 +39,7 @@ Copy-Item .env.example .env
 npm run db:migrate
 npm run db:seed:netflix
 npm run db:seed:amazon
+npm run db:verify:amazon
 npm run dev
 ```
 
@@ -74,8 +75,10 @@ Verified results:
 - `drizzle/0002_amazon_range_indexes.sql` was applied successfully.
 - `drizzle/0003_amazon_ai_attributes.sql` was applied successfully.
 - `drizzle/0004_amazon_review_intelligence.sql` was applied successfully.
+- `drizzle/0005_amazon_review_metadata.sql` was applied successfully.
 - Netflix seed import completed with 30 media items, 3 tags, and 5 shelves.
-- Amazon seed import completed with the current human-authored batches: 6 products, 5 categories, 6 subcategories, 18 reviews, 18 review profiles, 21 AI attributes, and 72 evidence rows.
+- Amazon seed import completed with the v3 AI-ready fixture: 420 products, 7 categories, 40 subcategories, 11,335 reviews, 11,335 review profiles, 28 AI attributes, and 58,371 evidence rows.
+- `npm run db:verify:amazon` confirmed product/review/evidence counts, 5-79 reviews per product, 2-8 evidence rows per review, median product rating 4.2, 273 products rated 4.0+, 26 positive-only products, 34 high-rating low-review products, 186 high-rating products with complaint evidence, complete `primary`/`description`/`brand` image URL coverage for all 420 products, clustered and diverse negative issue patterns, 0 duplicate review bodies, 0 evidence-text mismatches, and 0 category-context mismatches.
 - `GET /health` returned `{ "ok": true }`.
 - `GET /api/demos/netflix/home` returned Supabase-backed Netflix home data.
 - `GET /api/demos/amazon/home` returned Supabase-backed Amazon category data.
@@ -115,7 +118,7 @@ GET  /api/demos/amazon/products/:productId
 POST /api/logs
 ```
 
-Amazon facets now include `reviewIntelligence` summaries for negative issue types, affected attributes, and reviewer profile distributions. Product detail reviews include a `profile` object, and `reviewEvidence` includes `issueType`, `severity`, and a typed `evidenceValue`.
+Amazon facets now include `reviewIntelligence` summaries for negative issue types, affected attributes, and reviewer profile distributions. Product detail reviews include a `profile` object plus optional review metadata (`helpfulVotes`, `verifiedPurchase`, `reviewSource`, `reviewImagesCount`), and `reviewEvidence` includes `issueType`, `severity`, and a typed `evidenceValue`.
 
 Never share these with frontend code:
 
@@ -141,14 +144,18 @@ Frontend verification:
 - `src/repositories/`: query and serialization logic.
 - `src/scripts/migrate.ts`: applies all SQL files in `drizzle/` in filename order.
 - `src/scripts/seed-netflix.ts`: imports `frontend/Netflix/data.json` into normalized tables.
-- `src/scripts/seed-amazon.ts`: imports all human-authored batch files from `fixtures/amazon-human/batches/`.
-- `scripts/validate_amazon_human_batches.py`: validates human-authored batch references, profile coverage, evidence fields, and evidence text grounding.
-- `fixtures/amazon-human/`: backend source of truth for the Amazon human-authored seed dataset and progress log.
+- `src/scripts/seed-amazon.ts`: imports active Amazon batch files from `fixtures/amazon-human/seed/`; historical direct-authored and `src_op` batches live under `fixtures/amazon-human/archive/` and are not loaded.
+- `scripts/build_amazon_v3_batches.py`: builds the deterministic v3 synthetic Amazon fixture with uneven product popularity, market patterns, positive-only products, targeted fit/use complaints, category-specific issue clusters, review metadata, and broader fit/body profile coverage.
+- `scripts/validate_amazon_human_batches.py`: validates Amazon batch references, v3 counts, review/evidence distribution, profile coverage, positive-only/high-rating complaint cases, issue clustering/diversity, repeated text limits, context mismatches, and evidence text grounding.
+- `scripts/verify-amazon-v3-db.ts`: checks the live Supabase Amazon import.
+- `scripts/build_src_op_amazon_batches.py`: normalizes reviewed `frontend/Amazon/src_op` products into archived backend reference batches.
+- `fixtures/amazon-human/`: backend source of truth for the Amazon AI-ready seed dataset, archive notes, and progress log.
 - `drizzle/0000_initial.sql`: reproducible SQL schema migration.
 - `drizzle/0001_amazon_catalog.sql`: Amazon product catalog and review schema migration.
 - `drizzle/0002_amazon_range_indexes.sql`: Amazon range filter indexes.
 - `drizzle/0003_amazon_ai_attributes.sql`: Amazon AI attribute taxonomy/value/evidence schema.
 - `drizzle/0004_amazon_review_intelligence.sql`: Amazon review profile and issue evidence schema.
+- `drizzle/0005_amazon_review_metadata.sql`: Amazon review metadata columns and expanded issue vocabulary.
 
 ## `supabase/`
 
