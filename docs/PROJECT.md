@@ -2,9 +2,9 @@
 
 ## Goal
 
-Build Human-AI Interaction demo sites that show how AI can help users interact with dense web GUIs.
+Build a Human-AI Interaction shopping demo that shows how AI can help users interact with dense product-search GUIs.
 
-The main development target is the shopping demo in `frontend/Amazon/`. The secondary target is the media demo in `frontend/Netflix/`.
+The development target is the shopping demo in `frontend/Amazon/`.
 
 ## Main Concept
 
@@ -35,18 +35,10 @@ Implement in `frontend/Amazon/`:
 - repair/undo for selections
 - study logging
 
-## Secondary Scope
-
-Use `frontend/Netflix/` for media-grid experiments:
-
-- ambiguous item selection
-- natural-language search
-- numbered candidate overlays if needed
-
 ## Non-Goals
 
-- Full Amazon or Netflix clone.
-- Real purchasing or streaming flow.
+- Full Amazon clone.
+- Real purchasing flow.
 - Web crawling.
 - Production backend.
 - General autonomous GUI agent.

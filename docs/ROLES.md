@@ -8,36 +8,23 @@ The project is split into four development responsibilities. Each role has a cle
 
 - `frontend/`
 - `frontend/Amazon/`
-- `frontend/Netflix/`
 
 ### Main Responsibility
 
-Frontend implements the two demo pages and the mock data needed to make them usable before the backend is fully connected.
+Frontend implements the AImazon shopping demo and the UI states needed for product search, AI criteria clarification, comparison, and study logging.
 
 ### Detailed Responsibilities
 
 - Build and maintain the Amazon shopping demo page.
-- Build and maintain the Netflix media demo page.
-- Create mock product, review, media, and episode data for the demos.
-- Implement grids, cards, detail modals, selection states, overlays, comparison tray, and study-condition UI.
+- Implement grids, cards, detail modals, selection states, filters, AI Criteria Lens controls, comparison matrix, and study-condition UI.
 - Render backend data and AI display-agent payloads on screen.
 - Add frontend logging hooks for user-study events.
-- Keep each demo runnable with a local static server.
+- Keep the demo runnable locally.
 
 ### Deliverables
 
 - Working `frontend/Amazon/` demo.
-- Working `frontend/Netflix/` demo.
-- App-local mock datasets:
-  - `frontend/Amazon/products.json`
-  - `frontend/Amazon/review.json`
-  - `frontend/Netflix/data.json`
-- Amazon's API-backed dataset lives in `backend/fixtures/amazon-human/` as directly authored batch files; frontend app-local Amazon JSON is a fallback/mock fixture, not the backend seed source.
-- UI states for:
-  - baseline browsing
-  - chat-only AI
-  - in-place evidence overlay
-  - provenance/repair mode, if implemented
+- UI states for baseline browsing, AI criteria parsing, ambiguity clarification, comparison, evidence snippets, and repair/undo if implemented.
 - Integration points for backend APIs and AI display payloads.
 
 ### Not Owned
@@ -57,29 +44,22 @@ Frontend implements the two demo pages and the mock data needed to make them usa
 
 ### Main Responsibility
 
-Backend designs and deploys the data layer and API surface used by frontend and AI modules.
+Backend designs and deploys the Amazon Reviews 2023 data layer and API surface used by frontend and AI modules.
 
 ### Detailed Responsibilities
 
-- Design the database schema.
+- Design the shopping database schema.
 - Set up Supabase.
-- Write migrations, seed data, and local setup instructions.
+- Write migrations, import scripts, verification scripts, and local setup instructions.
 - Define API endpoints and response contracts.
 - Deploy backend services or document deployment steps.
 - Write API documentation.
-- Store and serve:
-  - demo site metadata
-  - products/media items
-  - reviews, review profiles, evidence snippets, and issue summaries
-  - AI task requests/results
-  - study tasks and conditions
-  - interaction logs
-  - final participant choices
+- Store and serve products, images, attributes, reviews, semantic signals, evidence snippets, AI task results, interaction logs, and final participant choices.
 
 ### Deliverables
 
 - Supabase schema and migration plan.
-- Seed data for frontend and AI integration.
+- Amazon Reviews 2023 import and verification scripts.
 - API docs with request/response examples.
 - Deployment guide or deployed Supabase/backend instance.
 - Logging endpoint or logging storage plan.
@@ -88,7 +68,7 @@ Backend designs and deploys the data layer and API surface used by frontend and 
 
 - Visual UI rendering.
 - Natural-language parsing logic.
-- Display optimization logic for overlays/trays.
+- Display optimization logic for overlays/matrices.
 
 ## 3. AI Developer 1: Natural-Language Request Agent
 
@@ -99,28 +79,17 @@ Backend designs and deploys the data layer and API surface used by frontend and 
 
 ### Main Responsibility
 
-AI Developer 1 recognizes user natural-language commands and turns them into structured backend task requests.
+AI Developer 1 recognizes user natural-language product-search commands and turns them into structured backend task requests.
 
 ### Detailed Responsibilities
 
 - Parse user commands such as:
-  - "compare 2 and 5"
-  - "show battery complaints only"
-  - "replace 3 with the one on the right"
-  - "find the cheapest wireless one"
-- Detect intent:
-  - select items
-  - compare items
-  - filter evidence
-  - repair selection
-  - clear selection
-  - request detail/evidence
-- Resolve references using frontend-provided context:
-  - visible card numbers
-  - item names
-  - item attributes
-  - selected items
-  - relative positions, if supported
+  - "comfortable commute shoes under 120 dollars for women"
+  - "여성용 겨울 출근 코트 120달러 이하"
+  - "방수되는 남성용 겨울 부츠"
+  - "면 소재 데일리 셔츠"
+- Detect intent, criteria, ambiguity, repair commands, and requested evidence.
+- Resolve references using frontend-provided context.
 - Convert parsed intent into a backend request.
 - Coordinate with backend on required fields and error handling.
 
@@ -128,7 +97,7 @@ AI Developer 1 recognizes user natural-language commands and turns them into str
 
 - Command parser or LLM prompt pipeline.
 - Structured task request schema.
-- Example command set for Amazon and Netflix.
+- Example command set for Amazon product search and comparison.
 - Request validation rules.
 - Integration notes for frontend and backend.
 
@@ -147,16 +116,11 @@ AI Developer 1 recognizes user natural-language commands and turns them into str
 
 ### Main Responsibility
 
-AI Developer 2 transforms backend/AI return data into display-ready payloads that help the user compare items efficiently.
+AI Developer 2 transforms backend/AI return data into display-ready payloads that help the user compare products efficiently.
 
 ### Detailed Responsibilities
 
-- Convert backend data into:
-  - evidence overlays
-  - comparison tray entries
-  - snippet expansion groups
-  - warnings or uncertainty cues
-  - chat-panel summaries, if needed
+- Convert backend data into criteria strips, comparison matrix entries, snippet groups, warnings, uncertainty cues, and summaries if needed.
 - Decide what evidence should be shown first for the project goal.
 - Preserve provenance by linking summaries to source snippets.
 - Avoid letting the AI make the final decision for the user.
@@ -166,8 +130,7 @@ AI Developer 2 transforms backend/AI return data into display-ready payloads tha
 ### Deliverables
 
 - Display payload schema.
-- Overlay payload examples.
-- Comparison tray payload examples.
+- Criteria/comparison/snippet payload examples.
 - Provenance and uncertainty display rules.
 - Frontend integration notes.
 
@@ -214,8 +177,8 @@ Backend returns:
 
 Display agent returns:
 
-- overlays
-- tray entries
+- criteria rows
+- comparison entries
 - snippet groups
 - warnings
 - display mode

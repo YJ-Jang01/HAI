@@ -14,6 +14,21 @@ class SelectedItem(BaseModel):
     type: Literal["visible_number", "attribute_query", "direct_id"]
     value: Union[str, int]
 
+class ParsedCriterionHint(BaseModel):
+    key: str = Field(description="Allowed backend attribute key or base field, e.g. style, season, occasion, price")
+    label: str
+    value: str | None = None
+    status: Literal["applied", "ambiguous", "open"]
+
+class ClarificationOptionHint(BaseModel):
+    value: str
+    label: str
+
+class ClarificationHint(BaseModel):
+    key: str
+    question: str
+    options: List[ClarificationOptionHint]
+
 class NlIntentRequest(BaseModel):
     intent: str
     category: str | None = None
@@ -22,6 +37,8 @@ class NlIntentRequest(BaseModel):
     preferences: List[str]
     # FIX: Changed from Dict to List to satisfy Gemini Developer API constraints
     rangeConstraints: List[RangeConstraint] = Field(default_factory=list)
+    parsedCriteria: List[ParsedCriterionHint] = Field(default_factory=list)
+    clarifications: List[ClarificationHint] = Field(default_factory=list)
 
 # ==========================================
 # Display Agent Contracts

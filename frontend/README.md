@@ -1,59 +1,33 @@
 # Frontend
 
-Frontend owns the demo sites and the mock data that fills those sites.
+Frontend now owns the AImazon shopping demo only.
 
 ## Responsibilities
 
 - Implement and maintain the `Amazon` shopping demo.
-- Implement and maintain the `Netflix` media demo.
-- Create app-local mock data for demos.
-- Build UI states for baseline, chat-only AI, and in-place AI evidence overlay conditions.
-- Integrate backend API responses and AI display-agent outputs into the screen.
-- Add interaction logging hooks required by the study.
+- Build UI states for baseline search, AI Criteria Lens, product comparison, and study logging.
+- Integrate backend Amazon 2023 API responses and AI display-agent outputs into the screen.
 
 ## Directory Layout
 
 ```text
 frontend/
-|-- Amazon/
-`-- Netflix/
+`-- Amazon/
 ```
 
-## Demo Ownership
-
-### `Amazon/`
+## `Amazon/`
 
 Main development target for product comparison and evidence overlays.
 
 Expected work:
 
-- numbered product cards
+- natural-language product search
+- AI criteria chips and clarification options
+- left filter sidebar for all search/listing result pages
 - multi-item selection
-- in-place evidence overlays
-- comparison tray
+- comparison matrix
 - source snippet expansion
 - study logging hooks
-
-### `Netflix/`
-
-Secondary media demo.
-
-Expected work:
-
-- OTT/media card interactions
-- ambiguous selection examples
-- media mock data
-- optional numbered candidate overlay
-
-## Data Rule
-
-Keep mock data inside each demo while it is app-specific:
-
-- `frontend/Amazon/products.json`
-- `frontend/Amazon/review.json`
-- `frontend/Netflix/data.json`
-
-Move data to a shared location only if both frontend and backend need the exact same fixture.
 
 ## Run Locally
 
@@ -61,37 +35,8 @@ Amazon is a React/Vite app:
 
 ```powershell
 cd frontend/Amazon
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Open `http://127.0.0.1:8000`.
-
-Netflix is a React/Vite app. By default it calls the backend API, so start `backend/` first when testing the integrated flow.
-
-Backend:
-
-```powershell
-cd backend
-npm install
-npm run db:migrate
-npm run db:seed:netflix
-npm run dev
-```
-
-Netflix frontend:
-
-```powershell
-cd frontend/Netflix
-npm install
-npm run dev
-```
-
-Open `http://127.0.0.1:8001`.
-
-Use `frontend/Netflix/.env` only when overriding the backend URL or forcing mock data:
-
-```text
-VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002
-VITE_USE_MOCK_DATA=false
-```

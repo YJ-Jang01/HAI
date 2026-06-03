@@ -36,4 +36,17 @@ Structured request object:
 
 ## Development Notes
 
-Start rule-based if needed. LLM integration can be added later, but the output contract should stay stable.
+For the current Amazon AI Criteria Lens flow, this agent is an always-on runtime dependency. The backend calls this service first, then validates the returned intent against backend-owned catalog taxonomy, attribute definitions, and range facets before querying Supabase.
+
+If Gemini is temporarily unavailable, this service returns a temporary Codex-authored fallback intent instead of failing the whole flow. That fallback only emits coarse category/product-type hints, explicit price ranges, and DB-backed attribute hints. The backend still performs the final taxonomy and attribute validation, so arbitrary filters are not executed.
+
+## Local Runtime
+
+The backend expects this service at `http://127.0.0.1:8011` by default.
+
+```powershell
+uv run uvicorn main:app --host 127.0.0.1 --port 8011
+```
+
+`GEMINI_API_KEY` must be available in the process environment, a local `.env` file, or `backend/.env`.
+For local compatibility, `GEMINI_KEY` and `gemini_key` are also accepted.

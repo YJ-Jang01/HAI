@@ -5,7 +5,6 @@ Keep this repository role-oriented and simple. Development code should stay insi
 ## Main Targets
 
 - Work in `frontend/Amazon/` for the shopping/product-comparison demo.
-- Work in `frontend/Netflix/` only when the task explicitly targets the media/OTT demo.
 - Work in `backend/` for DB schema, Supabase, deployment, and API docs.
 - Work in `ai/nl-request-agent/` for natural-language command recognition and backend task requests.
 - Work in `ai/display-agent/` for UI-ready display payload generation.

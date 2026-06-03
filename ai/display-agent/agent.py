@@ -5,15 +5,14 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from shared.models import DisplayResponse
+from shared.env import load_gemini_api_key
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
 
-load_dotenv()
-api_key = os.environ.get("GEMINI_API_KEY")
+api_key = load_gemini_api_key()
 
 if not api_key:
-    print("❌ ERROR: Could not find GEMINI_API_KEY. Check your .env file!")
+    print("ERROR: Could not find GEMINI_API_KEY/GEMINI_KEY/gemini_key. Check backend/.env or the agent .env file.")
     exit()
 
 client = genai.Client(api_key=api_key)
@@ -27,11 +26,11 @@ def generate_display_payload(target_items: list[str], feature_focus: str, raw_re
     
     system_instruction = (
         "You are the Display Agent for GroundedCompare. Your job is to take raw backend product data "
-        "and format it into UI-ready evidence overlays and a comparison tray. "
+        "and format it into UI-ready comparison labels, review-signal summaries, and matrix-friendly payloads. "
         "CRITICAL INSTRUCTION: You must populate the `transparency_statement` to explicitly explain "
         "how you interpreted the user's subjective constraints based on the data (e.g., 'AI interpreted "
         "your request as: Price under $120 and Rating above 4.3'). "
-        "Determine the correct `displayMode`: use 'in_place_overlay' for standard multi-item summaries, "
+        "Determine the correct `displayMode`: use 'in_place_overlay' for compact grid-attached match signals and bottom-matrix summaries, "
         "or 'nested_detail' if the user asked a highly specific follow-up comparing a specific feature. "
         "Populate the `detailedComparison` field if in 'nested_detail' mode. "
         "Populate the `tray` with the IDs of the items currently being compared. "

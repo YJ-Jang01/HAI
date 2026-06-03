@@ -34,3 +34,14 @@ UI-ready display model:
 ## Development Notes
 
 The display agent should not decide the user's final choice. It should expose evidence clearly and keep user control visible.
+
+## Local Runtime
+
+The backend expects this service at `http://127.0.0.1:8012` by default.
+
+```powershell
+uv run uvicorn main:app --host 127.0.0.1 --port 8012
+```
+
+`GEMINI_API_KEY` must be available in the process environment, a local `.env` file, or `backend/.env`.
+For local compatibility, `GEMINI_KEY` and `gemini_key` are also accepted.

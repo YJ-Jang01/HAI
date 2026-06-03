@@ -10,18 +10,25 @@
 
 This API stores the Amazon shopping demo catalog in normalized Postgres tables and returns UI-ready product data for the frontend.
 
+Localized response data is supported with `locale=en` or `locale=ko`. English is the default. When `locale=ko`, category labels, product names, product descriptions, brand story, feature bullets, review titles/bodies, reviewer profile labels, attribute labels/display values, and review evidence snippets are returned as Korean UI-ready text while stable IDs, slugs, attribute keys, enum values, and filter parameters remain unchanged.
+
 The current backend seed fixture files are:
 
 - `backend/fixtures/amazon-human/attribute_taxonomy.json`
-- `backend/fixtures/amazon-human/batches/batch-*.json`
+- `backend/fixtures/amazon-human/seed/batch-v3-*.json`
+- `backend/fixtures/amazon-human/seed/batch-v4-*.json`
 - `backend/fixtures/amazon-human/PROGRESS.md`
 
-The current fixture is a batch-authored dataset. The previous mechanical 400-product/10,000-review generated fixture was removed. As of the current progress log, Supabase contains only the completed human-authored batches.
+The current local and Supabase-seeded fixture is the Amazon AI-ready v3 baseline plus the cumulative v4 expansion batches. It currently contains 478 synthetic products, 11,625 reviews, 11,625 reviewer profiles, 59,031 review evidence rows, and 28 filterable attributes. Product review counts are intentionally uneven, currently from 5 to 79 reviews per product, to resemble real shopping catalogs where some products are under-reviewed and some are heavily validated.
+
+The v3 seed preserves a realistic positive rating skew while still including low-rated products, positive-only products, repeated product-specific defects, category-specific issue patterns, targeted fit/use complaints, high-rating low-review uncertainty cases, and petite/tall/plus reviewer profile coverage. Negative evidence is not spread uniformly across every product; products with enough negative evidence expose repeated issue structure, while intentionally polarizing products can split complaints across several issue types so the display layer can distinguish recurring weaknesses from fragmented disagreement.
+
+The v4 expansion is cumulative. `seed-amazon.ts` loads `seed/batch-v3-*.json` plus `seed/batch-v4-*.json` when v4 files exist, so partial v4 progress does not replace the baseline catalog. v4 prose is directly authored by Codex and must not be generated through Gemini, external LLM APIs, or rule-based sentence generation. Historical direct-authored, curated-source, and normalized `src_op` files are retained under `backend/fixtures/amazon-human/archive/` for traceability. The previous mechanical v2 fixture and repeated/context-mismatched `src_op` data are not loaded into Supabase.
 
 Reviews may be replaced later by the frontend team. The backend assumes the same base review fields:
 
 ```text
-id, productId, userName, rating, date, title, comment
+id, productId, userName, rating, date, title, comment, helpfulVotes, verifiedPurchase, reviewSource, reviewImagesCount
 ```
 
 AI-specific task tables are intentionally not included yet. The catalog includes AI-ready product attributes, review profiles, and issue-tagged review evidence so the NL request agent can translate natural-language requests into objective API filters while the backend returns evidence summaries for display.
@@ -140,6 +147,10 @@ erDiagram
     date review_date
     text title
     text body
+    int helpful_votes
+    boolean verified_purchase
+    text review_source
+    int review_images_count
     timestamptz created_at
   }
 
@@ -259,6 +270,8 @@ erDiagram
 | `sort_order` | integer | not null, default `0` | Ordered display position within the asset type. |
 | `alt_text` | text | nullable | Accessibility label for the image. |
 
+The active Amazon v3 seed requires every product to have at least one non-empty HTTP(S) URL for each asset role: `primary`, `description`, and `brand`. `pnpm run db:verify:amazon` fails if any active Amazon product is missing one of those image roles, has a blank image URL, or has a non-HTTP image URL.
+
 ### `product_features`
 
 | Column | Type | Constraint | Description |
@@ -306,6 +319,10 @@ erDiagram
 | `review_date` | date | not null | Review date. |
 | `title` | text | not null | Review title. |
 | `body` | text | not null | Review text. |
+| `helpful_votes` | integer | not null, default `0`, `>= 0` | Synthetic helpful-vote count for ranking/display experiments. |
+| `verified_purchase` | boolean | not null, default `true` | Whether the synthetic review represents a verified purchase. |
+| `review_source` | text | not null, default `synthetic_demo` | Source label for the synthetic review, such as demo, mobile, or post-purchase email. |
+| `review_images_count` | integer | not null, default `0`, `>= 0` | Number of synthetic review images attached to the review. |
 | `created_at` | timestamptz | not null | Insert timestamp. |
 
 ### `product_review_profiles`
@@ -382,6 +399,8 @@ erDiagram
 | `human_review_status` | text | not null | `generated`, `reviewed`, or `approved`. |
 | `created_at` | timestamptz | not null | Insert timestamp. |
 
+Current v3 negative `issue_type` values include `sizing_issue`, `too_heavy`, `too_thin`, `too_warm`, `not_breathable`, `scratchy_material`, `color_mismatch`, `wrinkles_easily`, `hard_to_wash`, `shrinks_after_wash`, `weak_durability`, `not_waterproof_enough`, `poor_value_for_price`, `uncomfortable_fit`, `pilling`, `odor_issue`, `transparent_fabric`, `strap_discomfort`, `poor_arch_support`, `slippery_sole`, `zipper_issue`, `insufficient_storage`, `see_through`, and `length_issue`.
+
 ## Indexes
 
 ```sql
@@ -414,6 +433,12 @@ on product_assets (product_id, asset_type, sort_order);
 
 create index idx_product_reviews_product_date
 on product_reviews (product_id, review_date);
+
+create index idx_product_reviews_product_helpful
+on product_reviews (product_id, helpful_votes desc);
+
+create index idx_product_reviews_verified_source
+on product_reviews (verified_purchase, review_source);
 
 create index idx_products_demo_price_external
 on products (demo_site_id, price_amount, external_id);
@@ -465,6 +490,7 @@ These indexes target the current frontend paths:
 - cursor pagination by `external_id`
 - AI range filtering by price, rating, and review count
 - AI attribute filtering by numeric, boolean, and enum attribute values
+- optional review ordering/inspection by helpful-vote and verified/source metadata
 - review profile and issue evidence loading for grounded display summaries
 - product detail asset/feature/option/review loading
 - future AI retrieval by stable product/review references
@@ -556,7 +582,7 @@ Product detail extends Product Summary:
 Returns all data required for the Amazon demo home/category entry screen. The response includes ordered categories, subcategories, product counts, and a representative product image for each category card.
 
 ```text
-GET /api/demos/amazon/home
+GET /api/demos/amazon/home?locale=ko
 ```
 
 Example response:
@@ -568,19 +594,19 @@ Example response:
     {
       "id": "uuid",
       "slug": "outerwear",
-      "name": "Outerwear",
+      "name": "아우터",
       "productCount": 25,
       "representativeProduct": {
         "id": "uuid",
         "externalId": 1,
-        "name": "프리미엄 캐시미어 블렌드 오버핏 코트",
+          "name": "Evertrail 블랙 합성 혼방 코트",
         "assets": []
       },
       "subCategories": [
         {
           "id": "uuid",
           "slug": "coats",
-          "name": "Coats"
+          "name": "코트"
         }
       ]
     }
@@ -593,7 +619,7 @@ Example response:
 Returns category and subcategory metadata only. Use this for search dropdowns, sidebars, and filters.
 
 ```text
-GET /api/demos/amazon/categories
+GET /api/demos/amazon/categories?locale=ko
 ```
 
 ## `GET /api/demos/amazon/products`
@@ -602,6 +628,7 @@ Returns product summaries for search, category/subcategory listing pages, and AI
 
 ```text
 GET /api/demos/amazon/products?query=coat&category=outerwear&subCategory=coats&priceMax=120&ratingMin=4.3&attribute.warmthLevelMin=4&attribute.waterproof=true&sort=rating_desc&limit=24
+GET /api/demos/amazon/products?query=%EC%BD%94%ED%8A%B8&locale=ko&limit=24
 ```
 
 Query parameters:
@@ -623,6 +650,7 @@ Query parameters:
 | `sort` | enum | no | One of `external_id_asc`, `price_asc`, `price_desc`, `rating_desc`, `review_count_desc`. Default `external_id_asc`. |
 | `limit` | integer | no | Max products to return. Default `24`, max `100`. |
 | `cursor` | integer | no | Last seen `externalId`; next page returns products after this value. Currently supported only with `sort=external_id_asc`. |
+| `locale` | enum | no | `en` or `ko`. Controls response display text only; slugs, IDs, attribute keys, and filter values remain backend-stable. |
 
 AI use:
 
@@ -630,6 +658,7 @@ AI use:
 - Range-like phrases must be converted into numeric parameters before this endpoint is called.
 - Example: `not too expensive` may become `priceMax=120`; `good reviews` may become `ratingMin=4.3&reviewCountMin=50`.
 - Attribute phrases should use the taxonomy keys. Example: `warm` may become `attribute.warmthLevelMin=4`; `waterproof bag` may become `category=bags&attribute.waterproof=true`.
+- v3 includes additional category-aware attributes such as `archSupportLevel`, `soleGripLevel`, `strapComfortLevel`, `pocketUtilityLevel`, `opacityLevel`, `careComplexityLevel`, and `lengthFit`.
 
 Example response:
 
@@ -809,6 +838,7 @@ AI use:
 - The AI display should expose the resolved rule to the user, for example: `not too expensive = price <= 99.99, based on the lower 40% of matching products`.
 - The backend returns numeric, attribute, negative issue, and reviewer-profile summaries; it does not decide the user's final priority.
 - The NL request agent should not pre-read evidence. It should request candidate sets and evidence summaries from this endpoint.
+- Because v3 review counts are intentionally uneven, the display agent should treat low-review products as lower-confidence candidates even when the average rating is high.
 
 ## `GET /api/demos/amazon/products/{productId}`
 
@@ -817,6 +847,7 @@ Returns full product detail data for one product. `productId` can be the interna
 ```text
 GET /api/demos/amazon/products/1
 GET /api/demos/amazon/products/cashmere-coat-1
+GET /api/demos/amazon/products/1?locale=ko
 ```
 
 Use this when a user opens a product detail modal. The response includes product assets, feature bullets, option groups, rating breakdown, reviews, AI-ready attributes, review evidence, and related products.
@@ -834,6 +865,10 @@ Relevant response fields:
       "date": "2025-02-10",
       "title": "장단점이 확실해서 조건을 봐야 합니다",
       "comment": "review text",
+      "helpfulVotes": 12,
+      "verifiedPurchase": true,
+      "reviewSource": "synthetic_demo",
+      "reviewImagesCount": 1,
       "profile": {
         "gender": "female",
         "heightCm": 170,
@@ -876,7 +911,7 @@ Relevant response fields:
 
 ## `POST /api/logs`
 
-Stores study/interaction logs. This endpoint is shared with the Netflix demo.
+Stores study/interaction logs for the Amazon demo.
 
 For Amazon, use:
 
@@ -923,7 +958,7 @@ The current schema supports API-grounded AI product selection without RAG/vector
 - The display agent is responsible for turning backend result/evidence payloads into overlays, comparison tray entries, and uncertainty cues.
 - Range-aware AI interpretation should call `GET /products/facets` first, expose the numeric rule to the user, then call `GET /products` with explicit range filters.
 - Range judgments must be grounded in API data such as `price.amount`, `rating`, and `reviewCount`; the AI should not invent thresholds that are not visible in the response contract.
-- Attribute judgments must use `product_attribute_definitions.key` values such as `warmthLevel`, `genderTarget`, `breathabilityLevel`, `shoulderStructure`, and `weightGrams`.
+- Attribute judgments must use `product_attribute_definitions.key` values such as `warmthLevel`, `genderTarget`, `breathabilityLevel`, `shoulderStructure`, `weightGrams`, `archSupportLevel`, `strapComfortLevel`, `pocketUtilityLevel`, and `careComplexityLevel`.
 - Review and weakness summaries should cite `product_review_evidence` snippets and `issueType` values instead of inventing review claims.
 - Fit/body claims should use `product_review_profiles` fields such as `heightCm`, `bodyType`, `purchasedSize`, and `fitResult`.
 - AI-generated summaries should not overwrite `products.description`; store generated outputs separately once the AI display contract is stable.

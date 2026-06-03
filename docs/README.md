@@ -6,6 +6,7 @@ This directory keeps only the active project docs needed for development.
 
 - `PROJECT.md`: product goal, scope, users, scenarios, and requirements.
 - `IMPLEMENTATION.md`: current app structure, implementation plan, data/logging notes, and backlog.
+- `SERVICE_DATA_FLOW.md`: target AI service flow, query-safety rules, and frontend/backend/AI data contract.
 - `ROLES.md`: frontend, backend, and AI role split with deliverables and contracts.
 - `BRANCHING.md`: branch naming, merge workflow, and review ownership.
 - `STUDY.md`: research questions, study conditions, tasks, metrics, and procedure.
@@ -17,7 +18,6 @@ This directory keeps only the active project docs needed for development.
 - `backend/README.md`: Supabase-backed Node API setup and frontend integration info.
 - `backend/api-docs/amazon-demo-api.md`: Amazon schema and API contract.
 - `frontend/README.md`: demo-specific frontend run notes.
-- `frontend/Netflix/README.md`: Netflix React/Vite backend API and mock-data switch.
 
 ## Rule
 

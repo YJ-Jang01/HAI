@@ -1,6 +1,7 @@
 import {
   boolean,
-  date,
+  bigint,
+  customType,
   index,
   integer,
   jsonb,
@@ -13,182 +14,18 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
+
 export const demoSites = pgTable("demo_sites", {
   id: uuid("id").defaultRandom().primaryKey(),
   slug: text("slug").notNull().unique(),
   displayName: text("display_name").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
-
-export const mediaItems = pgTable(
-  "media_items",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    demoSiteId: uuid("demo_site_id")
-      .notNull()
-      .references(() => demoSites.id, { onDelete: "cascade" }),
-    slug: text("slug").notNull(),
-    title: text("title").notNull(),
-    description: text("description").notNull(),
-    contentType: text("content_type").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("uq_media_items_demo_slug").on(table.demoSiteId, table.slug)],
-);
-
-export const mediaTags = pgTable(
-  "media_tags",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    demoSiteId: uuid("demo_site_id")
-      .notNull()
-      .references(() => demoSites.id, { onDelete: "cascade" }),
-    slug: text("slug").notNull(),
-    label: text("label").notNull(),
-  },
-  (table) => [uniqueIndex("uq_media_tags_demo_slug").on(table.demoSiteId, table.slug)],
-);
-
-export const mediaItemTags = pgTable(
-  "media_item_tags",
-  {
-    mediaItemId: uuid("media_item_id")
-      .notNull()
-      .references(() => mediaItems.id, { onDelete: "cascade" }),
-    tagId: uuid("tag_id")
-      .notNull()
-      .references(() => mediaTags.id, { onDelete: "cascade" }),
-  },
-  (table) => [
-    primaryKey({ columns: [table.mediaItemId, table.tagId] }),
-    index("idx_media_item_tags_tag_item").on(table.tagId, table.mediaItemId),
-  ],
-);
-
-export const mediaAssets = pgTable(
-  "media_assets",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    mediaItemId: uuid("media_item_id")
-      .notNull()
-      .references(() => mediaItems.id, { onDelete: "cascade" }),
-    assetType: text("asset_type").notNull(),
-    url: text("url").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-    altText: text("alt_text"),
-  },
-  (table) => [
-    uniqueIndex("uq_media_assets_item_type_order").on(table.mediaItemId, table.assetType, table.sortOrder),
-    index("idx_media_assets_item_type_order").on(table.mediaItemId, table.assetType, table.sortOrder),
-  ],
-);
-
-export const mediaEpisodes = pgTable(
-  "media_episodes",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    mediaItemId: uuid("media_item_id")
-      .notNull()
-      .references(() => mediaItems.id, { onDelete: "cascade" }),
-    seasonNumber: integer("season_number").notNull().default(1),
-    episodeNumber: integer("episode_number").notNull(),
-    title: text("title").notNull(),
-    description: text("description").notNull(),
-    durationSeconds: integer("duration_seconds").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    uniqueIndex("uq_media_episodes_item_episode").on(
-      table.mediaItemId,
-      table.seasonNumber,
-      table.episodeNumber,
-    ),
-    index("idx_media_episodes_item_order").on(table.mediaItemId, table.seasonNumber, table.episodeNumber),
-  ],
-);
-
-export const mediaEpisodeAssets = pgTable(
-  "media_episode_assets",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    mediaEpisodeId: uuid("media_episode_id")
-      .notNull()
-      .references(() => mediaEpisodes.id, { onDelete: "cascade" }),
-    assetType: text("asset_type").notNull(),
-    url: text("url").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    uniqueIndex("uq_media_episode_assets_episode_type_order").on(
-      table.mediaEpisodeId,
-      table.assetType,
-      table.sortOrder,
-    ),
-    index("idx_media_episode_assets_episode_type_order").on(
-      table.mediaEpisodeId,
-      table.assetType,
-      table.sortOrder,
-    ),
-  ],
-);
-
-export const mediaShelves = pgTable(
-  "media_shelves",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    demoSiteId: uuid("demo_site_id")
-      .notNull()
-      .references(() => demoSites.id, { onDelete: "cascade" }),
-    key: text("key").notNull(),
-    title: text("title").notNull(),
-    description: text("description"),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    uniqueIndex("uq_media_shelves_demo_key").on(table.demoSiteId, table.key),
-    index("idx_media_shelves_demo_order").on(table.demoSiteId, table.sortOrder),
-  ],
-);
-
-export const mediaHeroItems = pgTable(
-  "media_hero_items",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    demoSiteId: uuid("demo_site_id")
-      .notNull()
-      .references(() => demoSites.id, { onDelete: "cascade" }),
-    mediaItemId: uuid("media_item_id")
-      .notNull()
-      .references(() => mediaItems.id, { onDelete: "cascade" }),
-    titleOverride: text("title_override"),
-    descriptionOverride: text("description_override"),
-    sortOrder: integer("sort_order").notNull().default(0),
-    isActive: boolean("is_active").notNull().default(true),
-  },
-  (table) => [
-    uniqueIndex("uq_media_hero_items_demo_order").on(table.demoSiteId, table.sortOrder),
-    index("idx_media_hero_items_demo_active_order").on(table.demoSiteId, table.isActive, table.sortOrder),
-  ],
-);
-
-export const mediaShelfItems = pgTable(
-  "media_shelf_items",
-  {
-    shelfId: uuid("shelf_id")
-      .notNull()
-      .references(() => mediaShelves.id, { onDelete: "cascade" }),
-    mediaItemId: uuid("media_item_id")
-      .notNull()
-      .references(() => mediaItems.id, { onDelete: "cascade" }),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    primaryKey({ columns: [table.shelfId, table.mediaItemId] }),
-    uniqueIndex("uq_media_shelf_items_shelf_order").on(table.shelfId, table.sortOrder),
-    index("idx_media_shelf_items_shelf_order").on(table.shelfId, table.sortOrder),
-  ],
-);
 
 export const interactionLogs = pgTable(
   "interaction_logs",
@@ -209,299 +46,297 @@ export const interactionLogs = pgTable(
   ],
 );
 
-export const productCategories = pgTable(
-  "product_categories",
+export const shoppingDatasets = pgTable(
+  "shopping_datasets",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    demoSiteId: uuid("demo_site_id")
-      .notNull()
-      .references(() => demoSites.id, { onDelete: "cascade" }),
-    slug: text("slug").notNull(),
-    name: text("name").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    uniqueIndex("uq_product_categories_demo_slug").on(table.demoSiteId, table.slug),
-    index("idx_product_categories_demo_order").on(table.demoSiteId, table.sortOrder),
-  ],
-);
-
-export const productSubcategories = pgTable(
-  "product_subcategories",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    categoryId: uuid("category_id")
-      .notNull()
-      .references(() => productCategories.id, { onDelete: "cascade" }),
-    slug: text("slug").notNull(),
-    name: text("name").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    uniqueIndex("uq_product_subcategories_category_slug").on(table.categoryId, table.slug),
-    index("idx_product_subcategories_category_order").on(table.categoryId, table.sortOrder),
-  ],
-);
-
-export const products = pgTable(
-  "products",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    demoSiteId: uuid("demo_site_id")
-      .notNull()
-      .references(() => demoSites.id, { onDelete: "cascade" }),
-    categoryId: uuid("category_id")
-      .notNull()
-      .references(() => productCategories.id, { onDelete: "restrict" }),
-    subcategoryId: uuid("subcategory_id")
-      .notNull()
-      .references(() => productSubcategories.id, { onDelete: "restrict" }),
-    externalId: integer("external_id").notNull(),
-    slug: text("slug").notNull(),
-    name: text("name").notNull(),
-    keyword: text("keyword"),
-    description: text("description").notNull(),
-    brandStory: text("brand_story"),
-    priceAmount: numeric("price_amount", { precision: 12, scale: 2 }).notNull(),
-    currencyCode: text("currency_code").notNull().default("USD"),
-    rating: numeric("rating", { precision: 2, scale: 1 }).notNull(),
-    reviewCount: integer("review_count").notNull().default(0),
+    slug: text("slug").notNull().unique(),
+    sourceName: text("source_name").notNull(),
+    sourceCategory: text("source_category").notNull(),
+    sourceUrl: text("source_url"),
+    subsetStrategy: text("subset_strategy").notNull().default("capacity_stratified_sampling"),
+    dbBudgetBytes: bigint("db_budget_bytes", { mode: "number" }).notNull().default(430_000_000),
+    storageStrategy: text("storage_strategy").notNull().default("external_url_with_selective_fallback"),
+    rawManifest: jsonb("raw_manifest").notNull().default({}),
+    isActive: boolean("is_active").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [
-    uniqueIndex("uq_products_demo_external_id").on(table.demoSiteId, table.externalId),
-    uniqueIndex("uq_products_demo_slug").on(table.demoSiteId, table.slug),
-    index("idx_products_demo_external_id").on(table.demoSiteId, table.externalId),
-    index("idx_products_demo_category_external").on(table.demoSiteId, table.categoryId, table.externalId),
-    index("idx_products_demo_subcategory_external").on(table.demoSiteId, table.subcategoryId, table.externalId),
-    index("idx_products_demo_price_external").on(table.demoSiteId, table.priceAmount, table.externalId),
-    index("idx_products_demo_rating_external").on(table.demoSiteId, table.rating, table.externalId),
-    index("idx_products_demo_review_count_external").on(table.demoSiteId, table.reviewCount, table.externalId),
-    index("idx_products_category").on(table.categoryId),
-    index("idx_products_subcategory").on(table.subcategoryId),
-  ],
 );
 
-export const productAssets = pgTable(
-  "product_assets",
+export const shoppingCategories = pgTable(
+  "shopping_categories",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    productId: uuid("product_id")
+    datasetId: uuid("dataset_id")
       .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    assetType: text("asset_type").notNull(),
-    url: text("url").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-    altText: text("alt_text"),
-  },
-  (table) => [
-    uniqueIndex("uq_product_assets_product_type_order").on(table.productId, table.assetType, table.sortOrder),
-    index("idx_product_assets_product_type_order").on(table.productId, table.assetType, table.sortOrder),
-  ],
-);
-
-export const productFeatures = pgTable(
-  "product_features",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    featureText: text("feature_text").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    uniqueIndex("uq_product_features_product_order").on(table.productId, table.sortOrder),
-    index("idx_product_features_product_order").on(table.productId, table.sortOrder),
-  ],
-);
-
-export const productOptionGroups = pgTable(
-  "product_option_groups",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
+      .references(() => shoppingDatasets.id, { onDelete: "cascade" }),
+    parentId: uuid("parent_id"),
+    sourcePath: text("source_path").notNull(),
+    slug: text("slug").notNull(),
     name: text("name").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
+    depth: integer("depth").notNull().default(0),
+    productCount: integer("product_count").notNull().default(0),
+    includeInSeed: boolean("include_in_seed").notNull().default(true),
+    exclusionReason: text("exclusion_reason"),
+    rawCategory: jsonb("raw_category").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("uq_product_option_groups_product_name").on(table.productId, table.name),
-    uniqueIndex("uq_product_option_groups_product_order").on(table.productId, table.sortOrder),
-    index("idx_product_option_groups_product_order").on(table.productId, table.sortOrder),
+    uniqueIndex("uq_shopping_categories_dataset_path").on(table.datasetId, table.sourcePath),
+    uniqueIndex("uq_shopping_categories_dataset_slug").on(table.datasetId, table.slug),
+    index("idx_shopping_categories_dataset_depth").on(table.datasetId, table.depth, table.slug),
   ],
 );
 
-export const productOptionValues = pgTable(
-  "product_option_values",
+export const shoppingProducts = pgTable(
+  "shopping_products",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    optionGroupId: uuid("option_group_id")
+    datasetId: uuid("dataset_id")
       .notNull()
-      .references(() => productOptionGroups.id, { onDelete: "cascade" }),
-    value: text("value").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    uniqueIndex("uq_product_option_values_group_value").on(table.optionGroupId, table.value),
-    uniqueIndex("uq_product_option_values_group_order").on(table.optionGroupId, table.sortOrder),
-    index("idx_product_option_values_group_order").on(table.optionGroupId, table.sortOrder),
-  ],
-);
-
-export const productRatingBreakdown = pgTable(
-  "product_rating_breakdown",
-  {
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    ratingValue: integer("rating_value").notNull(),
-    percentage: integer("percentage").notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.productId, table.ratingValue] }),
-    index("idx_product_rating_breakdown_product").on(table.productId),
-  ],
-);
-
-export const productReviews = pgTable(
-  "product_reviews",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    externalId: integer("external_id").notNull(),
-    userName: text("user_name").notNull(),
-    rating: integer("rating").notNull(),
-    reviewDate: date("review_date").notNull(),
+      .references(() => shoppingDatasets.id, { onDelete: "cascade" }),
+    sourceProductId: text("source_product_id").notNull(),
+    parentAsin: text("parent_asin"),
+    asin: text("asin"),
+    slug: text("slug").notNull(),
     title: text("title").notNull(),
-    body: text("body").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    descriptionText: text("description_text"),
+    priceAmount: numeric("price_amount", { precision: 12, scale: 2 }),
+    currencyCode: text("currency_code").notNull().default("USD"),
+    brand: text("brand"),
+    store: text("store"),
+    averageRating: numeric("average_rating", { precision: 3, scale: 2 }),
+    ratingNumber: integer("rating_number").notNull().default(0),
+    mainCategory: text("main_category"),
+    categoryPath: jsonb("category_path").notNull().default([]),
+    features: jsonb("features").notNull().default([]),
+    description: jsonb("description").notNull().default([]),
+    details: jsonb("details").notNull().default({}),
+    rawMetadata: jsonb("raw_metadata").notNull(),
+    rawMetadataBytes: integer("raw_metadata_bytes").notNull().default(0),
+    hasImageUrl: boolean("has_image_url").notNull().default(false),
+    imageFallbackStatus: text("image_fallback_status").notNull().default("not_checked"),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("uq_product_reviews_product_external_id").on(table.productId, table.externalId),
-    index("idx_product_reviews_product_date").on(table.productId, table.reviewDate),
-    index("idx_product_reviews_product_rating").on(table.productId, table.rating),
+    uniqueIndex("uq_shopping_products_dataset_source").on(table.datasetId, table.sourceProductId),
+    uniqueIndex("uq_shopping_products_dataset_slug").on(table.datasetId, table.slug),
+    index("idx_shopping_products_dataset_price").on(table.datasetId, table.priceAmount),
+    index("idx_shopping_products_dataset_rating").on(table.datasetId, table.averageRating, table.ratingNumber),
+    index("idx_shopping_products_dataset_brand").on(table.datasetId, table.brand),
+    index("idx_shopping_products_dataset_store").on(table.datasetId, table.store),
+    index("idx_shopping_products_dataset_category").on(table.datasetId, table.mainCategory),
   ],
 );
 
-export const productReviewProfiles = pgTable(
-  "product_review_profiles",
+export const shoppingProductCategoryPaths = pgTable(
+  "shopping_product_category_paths",
   {
-    reviewId: uuid("review_id")
-      .primaryKey()
-      .references(() => productReviews.id, { onDelete: "cascade" }),
-    gender: text("gender").notNull(),
-    heightCm: integer("height_cm").notNull(),
-    bodyType: text("body_type").notNull(),
-    usualSize: text("usual_size").notNull(),
-    purchasedSize: text("purchased_size").notNull(),
-    fitResult: text("fit_result").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => shoppingProducts.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => shoppingCategories.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
   },
-  (table) => [
-    index("idx_product_review_profiles_fit_result").on(table.fitResult),
-    index("idx_product_review_profiles_gender_height_body").on(table.gender, table.heightCm, table.bodyType),
-  ],
+  (table) => [primaryKey({ columns: [table.productId, table.categoryId] })],
 );
 
-export const productAttributeDefinitions = pgTable(
-  "product_attribute_definitions",
+export const shoppingProductImages = pgTable(
+  "shopping_product_images",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    demoSiteId: uuid("demo_site_id")
+    productId: uuid("product_id")
       .notNull()
-      .references(() => demoSites.id, { onDelete: "cascade" }),
+      .references(() => shoppingProducts.id, { onDelete: "cascade" }),
+    sourceUrl: text("source_url").notNull(),
+    variant: text("variant").notNull().default("source"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    status: text("status").notNull().default("unchecked"),
+    httpStatus: integer("http_status"),
+    checkedAt: timestamp("checked_at", { withTimezone: true }),
+    storageBucket: text("storage_bucket"),
+    storagePath: text("storage_path"),
+    storagePublicUrl: text("storage_public_url"),
+    rawImage: jsonb("raw_image").notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_shopping_product_images_source_variant").on(table.productId, table.sourceUrl, table.variant),
+    index("idx_shopping_product_images_product_order").on(table.productId, table.isPrimary, table.sortOrder),
+    index("idx_shopping_product_images_status").on(table.status, table.checkedAt),
+  ],
+);
+
+export const shoppingProductAttributes = pgTable(
+  "shopping_product_attributes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => shoppingProducts.id, { onDelete: "cascade" }),
     key: text("key").notNull(),
     label: text("label").notNull(),
-    dataType: text("data_type").notNull(),
-    unit: text("unit"),
-    minValue: numeric("min_value", { precision: 12, scale: 2 }),
-    maxValue: numeric("max_value", { precision: 12, scale: 2 }),
-    description: text("description").notNull(),
-    isFilterable: boolean("is_filterable").notNull().default(true),
-    isRangeFacet: boolean("is_range_facet").notNull().default(false),
-    sortOrder: integer("sort_order").notNull().default(0),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("uq_product_attribute_definitions_demo_key").on(table.demoSiteId, table.key),
-    index("idx_product_attribute_definitions_demo_order").on(table.demoSiteId, table.sortOrder),
-  ],
-);
-
-export const productAttributeOptions = pgTable(
-  "product_attribute_options",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    attributeDefinitionId: uuid("attribute_definition_id")
-      .notNull()
-      .references(() => productAttributeDefinitions.id, { onDelete: "cascade" }),
-    value: text("value").notNull(),
-    label: text("label").notNull(),
-    sortOrder: integer("sort_order").notNull().default(0),
-  },
-  (table) => [
-    uniqueIndex("uq_product_attribute_options_definition_value").on(table.attributeDefinitionId, table.value),
-    index("idx_product_attribute_options_definition_order").on(table.attributeDefinitionId, table.sortOrder),
-  ],
-);
-
-export const productAttributeValues = pgTable(
-  "product_attribute_values",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    productId: uuid("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    attributeDefinitionId: uuid("attribute_definition_id")
-      .notNull()
-      .references(() => productAttributeDefinitions.id, { onDelete: "cascade" }),
-    optionId: uuid("option_id").references(() => productAttributeOptions.id, { onDelete: "restrict" }),
     valueText: text("value_text"),
     valueNumber: numeric("value_number", { precision: 12, scale: 2 }),
     valueBoolean: boolean("value_boolean"),
-    source: text("source").notNull().default("generated"),
-    humanReviewStatus: text("human_review_status").notNull().default("generated"),
+    valueJson: jsonb("value_json"),
+    sourcePath: text("source_path").notNull(),
+    isFacetCandidate: boolean("is_facet_candidate").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("uq_product_attribute_values_product_definition").on(table.productId, table.attributeDefinitionId),
-    index("idx_product_attribute_values_product_definition").on(table.productId, table.attributeDefinitionId),
-    index("idx_product_attribute_values_definition_number").on(table.attributeDefinitionId, table.valueNumber),
-    index("idx_product_attribute_values_definition_boolean").on(table.attributeDefinitionId, table.valueBoolean),
-    index("idx_product_attribute_values_definition_option").on(table.attributeDefinitionId, table.optionId),
+    uniqueIndex("uq_shopping_product_attributes_product_key_path").on(table.productId, table.key, table.sourcePath),
+    index("idx_shopping_product_attributes_key_text").on(table.key, table.valueText),
+    index("idx_shopping_product_attributes_key_number").on(table.key, table.valueNumber),
   ],
 );
 
-export const productReviewEvidence = pgTable(
-  "product_review_evidence",
+export const shoppingProductSemanticAttributes = pgTable(
+  "shopping_product_semantic_attributes",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => shoppingProducts.id, { onDelete: "cascade" }),
+    datasetId: uuid("dataset_id")
+      .notNull()
+      .references(() => shoppingDatasets.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    valueText: text("value_text"),
+    valueNumber: numeric("value_number", { precision: 8, scale: 3 }),
+    valueBoolean: boolean("value_boolean"),
+    score: numeric("score", { precision: 6, scale: 4 }).notNull().default("0"),
+    confidence: numeric("confidence", { precision: 6, scale: 4 }).notNull().default("0"),
+    evidenceCount: integer("evidence_count").notNull().default(0),
+    positiveCount: integer("positive_count").notNull().default(0),
+    negativeCount: integer("negative_count").notNull().default(0),
+    neutralCount: integer("neutral_count").notNull().default(0),
+    source: text("source").notNull().default("hybrid"),
+    sourceVersion: text("source_version").notNull().default("amazon2023_semantic_v1"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_shopping_product_semantic_product_key").on(table.productId, table.key),
+    index("idx_shopping_product_semantic_dataset_key_text").on(table.datasetId, table.key, table.valueText),
+    index("idx_shopping_product_semantic_dataset_key_number").on(table.datasetId, table.key, table.valueNumber),
+  ],
+);
+
+export const shoppingProductSearchDocuments = pgTable(
+  "shopping_product_search_documents",
+  {
+    productId: uuid("product_id")
+      .primaryKey()
+      .references(() => shoppingProducts.id, { onDelete: "cascade" }),
+    datasetId: uuid("dataset_id")
+      .notNull()
+      .references(() => shoppingDatasets.id, { onDelete: "cascade" }),
+    searchText: text("search_text").notNull(),
+    searchVector: tsvector("search_vector").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("idx_shopping_product_search_documents_dataset").on(table.datasetId)],
+);
+
+export const shoppingReviews = pgTable(
+  "shopping_reviews",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    datasetId: uuid("dataset_id")
+      .notNull()
+      .references(() => shoppingDatasets.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => shoppingProducts.id, { onDelete: "cascade" }),
+    sourceReviewId: text("source_review_id").notNull(),
+    reviewerIdHash: text("reviewer_id_hash"),
+    rating: integer("rating").notNull(),
+    title: text("title"),
+    body: text("body").notNull(),
+    helpfulVote: integer("helpful_vote").notNull().default(0),
+    verifiedPurchase: boolean("verified_purchase"),
+    reviewTimestamp: timestamp("review_timestamp", { withTimezone: true }),
+    unixReviewTime: integer("unix_review_time"),
+    rawReview: jsonb("raw_review").notNull(),
+    rawReviewBytes: integer("raw_review_bytes").notNull().default(0),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_shopping_reviews_dataset_source").on(table.datasetId, table.sourceReviewId),
+    index("idx_shopping_reviews_product_rating").on(table.productId, table.rating),
+    index("idx_shopping_reviews_product_time").on(table.productId, table.reviewTimestamp),
+  ],
+);
+
+export const shoppingReviewEvidence = pgTable(
+  "shopping_review_evidence",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => shoppingProducts.id, { onDelete: "cascade" }),
     reviewId: uuid("review_id")
       .notNull()
-      .references(() => productReviews.id, { onDelete: "cascade" }),
-    attributeDefinitionId: uuid("attribute_definition_id")
-      .notNull()
-      .references(() => productAttributeDefinitions.id, { onDelete: "cascade" }),
+      .references(() => shoppingReviews.id, { onDelete: "cascade" }),
+    attributeKey: text("attribute_key").notNull(),
+    attributeLabel: text("attribute_label").notNull(),
     sentiment: text("sentiment").notNull(),
     evidenceText: text("evidence_text").notNull(),
     issueType: text("issue_type").notNull().default("none"),
-    severity: integer("severity").notNull().default(0),
-    evidenceValueText: text("evidence_value_text"),
-    evidenceValueNumber: numeric("evidence_value_number", { precision: 12, scale: 2 }),
-    evidenceValueBoolean: boolean("evidence_value_boolean"),
-    source: text("source").notNull().default("generated"),
-    humanReviewStatus: text("human_review_status").notNull().default("generated"),
+    confidence: numeric("confidence", { precision: 5, scale: 2 }),
+    source: text("source").notNull().default("rule_extractor"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index("idx_product_review_evidence_review").on(table.reviewId),
-    index("idx_product_review_evidence_attribute").on(table.attributeDefinitionId),
-    index("idx_product_review_evidence_issue_sentiment_severity").on(table.issueType, table.sentiment, table.severity),
-    index("idx_product_review_evidence_attribute_issue").on(table.attributeDefinitionId, table.issueType),
+    index("idx_shopping_review_evidence_product_attr").on(table.productId, table.attributeKey),
+    index("idx_shopping_review_evidence_review").on(table.reviewId),
+    index("idx_shopping_review_evidence_issue_sentiment").on(table.issueType, table.sentiment),
   ],
+);
+
+export const shoppingImportRuns = pgTable(
+  "shopping_import_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    datasetId: uuid("dataset_id").references(() => shoppingDatasets.id, { onDelete: "set null" }),
+    status: text("status").notNull().default("started"),
+    mode: text("mode").notNull().default("profile"),
+    phase: text("phase").notNull().default("init"),
+    dbBudgetBytes: bigint("db_budget_bytes", { mode: "number" }).notNull().default(430_000_000),
+    dbSizeBeforeBytes: bigint("db_size_before_bytes", { mode: "number" }),
+    dbSizeAfterBytes: bigint("db_size_after_bytes", { mode: "number" }),
+    productsScanned: integer("products_scanned").notNull().default(0),
+    productsImported: integer("products_imported").notNull().default(0),
+    reviewsScanned: integer("reviews_scanned").notNull().default(0),
+    reviewsImported: integer("reviews_imported").notNull().default(0),
+    rawManifest: jsonb("raw_manifest").notNull().default({}),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [index("idx_shopping_import_runs_status").on(table.status, table.startedAt)],
+);
+
+export const shoppingSeedSizeSamples = pgTable(
+  "shopping_seed_size_samples",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    importRunId: uuid("import_run_id")
+      .notNull()
+      .references(() => shoppingImportRuns.id, { onDelete: "cascade" }),
+    chunkNumber: integer("chunk_number").notNull(),
+    productsImported: integer("products_imported").notNull().default(0),
+    reviewsImported: integer("reviews_imported").notNull().default(0),
+    dbSizeBytes: bigint("db_size_bytes", { mode: "number" }).notNull(),
+    productTableBytes: bigint("product_table_bytes", { mode: "number" }),
+    reviewTableBytes: bigint("review_table_bytes", { mode: "number" }),
+    rawBytesSeen: bigint("raw_bytes_seen", { mode: "number" }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("uq_shopping_seed_size_samples_run_chunk").on(table.importRunId, table.chunkNumber)],
 );

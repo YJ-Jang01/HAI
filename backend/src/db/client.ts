@@ -22,6 +22,9 @@ const ssl =
 export const pool = new Pool({
   connectionString,
   ssl,
+  max: Number(process.env.DATABASE_POOL_MAX ?? 6),
+  idleTimeoutMillis: Number(process.env.DATABASE_IDLE_TIMEOUT_MS ?? 10_000),
+  connectionTimeoutMillis: Number(process.env.DATABASE_CONNECTION_TIMEOUT_MS ?? 10_000),
 });
 
 export const db = drizzle({ client: pool, schema });

@@ -11,6 +11,10 @@ This directory is for backend deployment notes and checklists.
 - Rollback notes.
 - Links to deployed project dashboards, if safe to share.
 
+## Runbooks
+
+- `amazon2023-cutover-runbook.md`: live-data backup gate, Amazon Reviews 2023 seed planning/import, image fallback candidates, and frontend/API validation.
+
 ## Initial Deployment Checklist
 
 - [ ] Supabase project created.
@@ -54,32 +58,30 @@ Never expose `DATABASE_URL` or Supabase service-role credentials to browser code
 Run from `backend/` after `backend/.env` points to Supabase:
 
 ```powershell
-npm install
-npm run check
-npm run db:migrate
-npm run db:seed:netflix
-npm run db:seed:amazon
+pnpm install
+pnpm run check
+pnpm run db:migrate
+pnpm run db:seed:amazon
 ```
 
 Then verify:
 
 ```powershell
-npm run dev
+pnpm run dev
 ```
 
-Open `http://127.0.0.1:8002/api/demos/netflix/home`.
+Open `http://127.0.0.1:8002/api/demos/amazon/products?limit=5`.
 
 ## Deployment Commands
 
 Most hosts need equivalent commands:
 
 ```bash
-npm install
-npm run build
-npm run db:migrate
-npm run db:seed:netflix
-npm run db:seed:amazon
-npm start
+pnpm install
+pnpm run build
+pnpm run db:migrate
+pnpm run db:seed:amazon
+pnpm start
 ```
 
 Run seed commands only when seed data should be refreshed. `db:seed:amazon` clears and reloads the Amazon catalog for the `amazon` demo site, so during an actual study, avoid reseeding unless logs and catalog state have already been backed up and the team agrees to reset demo data.

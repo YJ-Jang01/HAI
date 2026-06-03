@@ -16,9 +16,10 @@ Use Supabase as managed Postgres and Node.js as the API layer.
 
 - Frontend calls Node.js endpoints.
 - Node.js connects to Supabase Postgres with `DATABASE_URL`.
-- `npm run db:migrate` creates tables, constraints, and indexes.
-- `npm run db:seed:amazon` uploads the current Amazon human-authored batch fixture from `backend/fixtures/amazon-human/` into Supabase.
-- `npm run db:seed:netflix` uploads `frontend/Netflix/data.json` into Supabase.
+- `pnpm run db:migrate` creates tables, constraints, and indexes.
+- `pnpm run db:seed:amazon` uploads the current Amazon AI-ready batch fixture from `backend/fixtures/amazon-human/` into Supabase. When `seed/batch-v4-*.json` files exist, the importer loads the v3 baseline plus all v4 cumulative expansion batches.
+- `pnpm run db:verify:amazon` verifies the live Amazon import counts and key data-quality checks.
+- `pnpm run db:seed:netflix` uploads `frontend/Netflix/data.json` into Supabase.
 
 Do not put Supabase service-role keys in frontend code. The browser should not connect directly to the database for this project structure.
 
@@ -43,9 +44,9 @@ For this backend, `DATABASE_URL` is required. If the Supabase project is not rea
 Run from `backend/`:
 
 ```powershell
-npm install
-npm run db:migrate
-npm run db:seed:netflix
+pnpm install
+pnpm run db:migrate
+pnpm run db:seed:netflix
 ```
 
 The import command maps the current frontend mock data like this:
@@ -66,20 +67,21 @@ The existing Netflix rows are split into five shelves with six items each to mat
 Run from `backend/`:
 
 ```powershell
-npm install
-npm run db:migrate
-npm run db:seed:amazon
+pnpm install
+pnpm run db:migrate
+pnpm run db:seed:amazon
+pnpm run db:verify:amazon
 ```
 
-The import command maps the current human-authored batch fixture data like this:
+The import command maps the current AI-ready v3 batch fixture data like this:
 
 | Fixture JSON | Database |
 | --- | --- |
 | `fixtures/amazon-human/attribute_taxonomy.json` | `product_attribute_definitions`, `product_attribute_options` |
-| `batches/*.json.products[]` | `products`, `product_assets`, `product_features`, `product_option_groups`, `product_rating_breakdown`, `product_attribute_values` |
-| `batches/*.json.reviews[]` | `product_reviews` |
-| `batches/*.json.reviewProfiles[]` | `product_review_profiles` |
-| `batches/*.json.reviewEvidence[]` | `product_review_evidence` |
+| `seed/*.json.products[]` | `products`, `product_assets`, `product_features`, `product_option_groups`, `product_rating_breakdown`, `product_attribute_values` |
+| `seed/*.json.reviews[]` | `product_reviews` |
+| `seed/*.json.reviewProfiles[]` | `product_review_profiles` |
+| `seed/*.json.reviewEvidence[]` | `product_review_evidence` |
 
 ## Normalization Rule
 
@@ -103,6 +105,11 @@ Netflix schema details are documented in:
 - `product_option_values`
 - `product_rating_breakdown`
 - `product_reviews`
+- `product_review_profiles`
+- `product_review_evidence`
+- `product_attribute_definitions`
+- `product_attribute_options`
+- `product_attribute_values`
 
 ## Current Netflix Tables
 

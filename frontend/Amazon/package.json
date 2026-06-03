@@ -2,10 +2,12 @@
   "name": "hai-amazon-demo",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.7.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 8000",
     "build": "vite build",
+    "e2e:amazon2023": "node scripts/e2e-amazon2023-cdp.mjs",
     "preview": "vite preview --host 127.0.0.1 --port 8000"
   },
   "dependencies": {

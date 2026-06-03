@@ -1,11 +1,10 @@
 # HAI
 
-Human-AI Interaction project built around two demo web sites:
+Human-AI Interaction project built around the AImazon shopping demo:
 
 - `frontend/Amazon/`: shopping/product-comparison demo. This is the main development target.
-- `frontend/Netflix/`: media/OTT demo. This is the secondary demo target.
 
-The demo names are temporary. The code should keep working inside these two demo directories until the project is renamed.
+The demo name is temporary. The code should keep working inside `frontend/Amazon/` until the project is renamed.
 
 ## Project Direction
 
@@ -22,8 +21,7 @@ For the shopping demo, this means users should eventually be able to select mult
 |-- README.md
 |-- AGENTS.md
 |-- frontend/
-|   |-- Amazon/
-|   `-- Netflix/
+|   `-- Amazon/
 |-- backend/
 |   |-- supabase/
 |   |-- deployment/
@@ -35,6 +33,7 @@ For the shopping demo, this means users should eventually be able to select mult
 `-- docs/
     |-- PROJECT.md
     |-- IMPLEMENTATION.md
+    |-- SERVICE_DATA_FLOW.md
     |-- ROLES.md
     |-- BRANCHING.md
     |-- STUDY.md
@@ -44,13 +43,13 @@ For the shopping demo, this means users should eventually be able to select mult
 ## Where Things Go
 
 - `frontend/Amazon/`: shopping demo code, app-local JSON data, and app-local assets.
-- `frontend/Netflix/`: OTT demo code and app-local JSON data.
 - `backend/`: DB schema, Supabase setup, deployment, and API docs.
 - `ai/nl-request-agent/`: natural-language command recognition and backend task request generation.
 - `ai/display-agent/`: transforms returned data into UI-ready overlay/tray display payloads.
 - `ai/shared/`: shared AI request/response contracts.
 - `docs/PROJECT.md`: product goal, scope, and feature requirements.
 - `docs/IMPLEMENTATION.md`: implementation plan, data/logging notes, and backlog.
+- `docs/SERVICE_DATA_FLOW.md`: target AI service flow, query safety rules, and frontend/backend/AI data contract.
 - `docs/ROLES.md`: detailed team responsibility split.
 - `docs/BRANCHING.md`: branch and merge workflow for role-based development.
 - `docs/STUDY.md`: user-study plan and metrics.
@@ -65,25 +64,22 @@ Amazon is a React/Vite app:
 
 ```powershell
 cd frontend/Amazon
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Open `http://127.0.0.1:8000`.
-
-Netflix is a React/Vite app that calls the backend API by default. Run the backend first if you want to use Supabase-backed data.
 
 Backend:
 
 ```powershell
 cd backend
-npm install
+pnpm install
 Copy-Item .env.example .env
 # Fill DATABASE_URL in .env before running migrations.
-npm run db:migrate
-npm run db:seed:amazon
-npm run db:seed:netflix
-npm run dev
+pnpm run db:migrate
+pnpm run db:seed:amazon
+pnpm run dev
 ```
 
 Verify the backend:
@@ -91,20 +87,7 @@ Verify the backend:
 ```text
 http://127.0.0.1:8002/health
 http://127.0.0.1:8002/api/demos/amazon/home
-http://127.0.0.1:8002/api/demos/netflix/home
 ```
-
-Netflix frontend:
-
-```powershell
-cd frontend/Netflix
-npm install
-npm run dev
-```
-
-Open `http://127.0.0.1:8001`.
-
-The frontend uses `VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002` by default. To run Netflix without the backend, create `frontend/Netflix/.env` and set `VITE_USE_MOCK_DATA=true`.
 
 ## Branch Workflow
 
@@ -120,7 +103,6 @@ See `docs/BRANCHING.md`.
 Current backend API documentation is focused on page data, schema design, and study logging.
 
 - `backend/api-docs/amazon-demo-api.md`: Amazon demo schema, Mermaid ER diagram, indexes, response models, and endpoint specs.
-- `backend/api-docs/netflix-demo-api.md`: Netflix demo schema, Mermaid ER diagram, indexes, response models, and endpoint specs.
 - `backend/supabase/README.md`: Supabase schema/migration workspace notes.
 
 AI-agent-specific endpoints are not finalized yet. Add them only after the AI request/display contracts are agreed.
