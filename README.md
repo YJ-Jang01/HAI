@@ -153,4 +153,5 @@ See `docs/BRANCHING.md`.
 - `backend/api-docs/amazon2023-api.md`: Amazon Reviews 2023 API and data contract.
 - `backend/api-docs/amazon-ai-api.md`: AI Criteria Lens API details.
 - `backend/deployment/amazon2023-cutover-runbook.md`: dataset cutover and backup procedure.
+- `docs/FREE_DEPLOYMENT.md`: Vercel frontend + Render backend free deployment guide.
 - `docs/STUDY.md`: user-study plan and logging requirements.

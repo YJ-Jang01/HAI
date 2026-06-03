@@ -38,6 +38,13 @@ pnpm run build
 pnpm run e2e:amazon2023
 ```
 
+Deployment:
+
+- Vercel config lives in `vercel.json`.
+- Set Vercel Root Directory to `frontend/Amazon`.
+- Set `VITE_AMAZON_API_BASE_URL` to the Render backend URL.
+- Full steps are in `../../docs/FREE_DEPLOYMENT.md`.
+
 ## Implemented User Flows
 
 1. Home page presents a shopping-mall entry screen with hero products, department modules, product shelves, and working nav items.

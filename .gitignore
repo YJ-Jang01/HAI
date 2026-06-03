@@ -8,6 +8,8 @@ dist/
 coverage/
 .codex-tmp/
 .playwright-cli/
+.vercel/
+.netlify/
 backend/backups/
 backend/datasets/
 backend/reports/

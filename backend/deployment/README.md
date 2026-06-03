@@ -5,6 +5,7 @@ Deployment notes for the AImazon backend, Supabase database, and Amazon Reviews 
 ## Runbooks
 
 - `amazon2023-cutover-runbook.md`: backup approval, Amazon 2023 seed planning/import, semantic enrichment, image fallback, frontend/API validation, and rollback notes.
+- `../../docs/FREE_DEPLOYMENT.md`: Vercel frontend + Render backend free-tier deployment guide.
 
 ## Local Production-Like Run
 
