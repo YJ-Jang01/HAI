@@ -5,8 +5,7 @@
 ```text
 .
 |-- frontend/
-|   |-- Amazon/
-|   `-- Netflix/
+|   `-- Amazon/
 |-- backend/
 |   |-- supabase/
 |   |-- deployment/
@@ -19,21 +18,16 @@
 ```
 
 See `docs/ROLES.md` for ownership and deliverables.
+See `docs/SERVICE_DATA_FLOW.md` for the target AI query flow, backend gatekeeping rules, and minimized frontend response contract.
 
 ## Current Integration Status
 
-- `dev` contains the latest `backend` and `frontend` branch work.
-- `backend/` provides the Node.js API and Supabase Postgres schema/seed flow.
-- `frontend/Netflix/` is a React/Vite/Tailwind app and uses the backend API by default.
-- Netflix can still run from local mock data only when `VITE_USE_MOCK_DATA=true`.
+- `frontend/Amazon/` is the only active frontend demo.
+- `backend/` provides the Node.js API and Supabase Postgres schema for the Amazon Reviews 2023 fashion catalog.
+- Amazon frontend calls `http://127.0.0.1:8002` by default and runs on `http://127.0.0.1:8000`.
+- The retired secondary demo code and data have been removed.
 
-Run order for the integrated Netflix demo:
-
-1. Start `backend/` on `http://127.0.0.1:8002`.
-2. Start `frontend/Netflix/` on `http://127.0.0.1:8001`.
-3. Verify `GET /api/demos/netflix/home` in the browser Network tab.
-
-## Current Apps
+## Current App
 
 ### `frontend/Amazon/`
 
@@ -42,109 +36,79 @@ Main shopping demo.
 Current files:
 
 - `index.html`: Vite HTML entry.
-- `src/App.jsx`: React UI, category/search rendering, filters, detail modal, reviews, and cart state.
-- `src/data.js`: product/review JSON loading and normalization helpers.
+- `src/App.jsx`: React UI, category/search rendering, filter sidebar, detail modal, AI Criteria Lens state, clarification controls, comparison matrix, and cart state.
+- `src/data.js`: Amazon catalog/API client and AI Criteria Lens API normalization helpers.
 - `src/styles.css`: Tailwind CSS entry file.
-- `products.json`: app-local fallback product data.
-- `review.json`: app-local fallback review data.
-- `picture/`: app-local image assets.
 
 Already implemented:
 
-- category browsing
-- search
-- product grid
-- product detail modal
-- review rendering
-- AI-style summary area in detail modal
-- cart count/toast
-- React/Vite/Tailwind frontend implementation
-- backend Amazon schema, migration, human-authored batch seed import, review intelligence data, and page-data API
+- Amazon Reviews 2023 catalog API integration
+- category browsing and general search
+- product grid and product detail modal
+- review rendering and evidence snippets
+- search-bar AI toggle
+- `/api/ai/amazon2023/query` parsed criteria flow
+- ambiguity clarification chips
+- left filter sidebar on search/listing result pages
+- comparison matrix with selected products
+- study logging endpoint
 
-Missing for GroundedCompare:
+Missing or still under refinement:
 
-- visible product numbers
-- multi-item selection
-- evidence overlays on selected cards
-- comparison tray
-- source snippet expansion in grid
-- repair/undo
-- study logging/export
-
-### `frontend/Netflix/`
-
-Secondary media demo.
-
-Current files:
-
-- `index.html`: Vite HTML entry.
-- `src/App.jsx`: React UI, interaction state, and Tailwind utility styling.
-- `src/dataAdapter.js`: local mock/backend API data adapter.
-- `src/styles.css`: Tailwind CSS entry file.
-- `data.json`
-- `package.json`
-
-Already implemented:
-
-- media rows
-- hero section
-- expand modal with video
-- simple tag/name search
-- backend API integration by default through `VITE_NETFLIX_API_BASE_URL`
-- local mock fallback only when `VITE_USE_MOCK_DATA=true`
+- production-grade Gemini quota/error UX
+- richer clarification history and undo for criteria refinements
+- broader AI QA corpus coverage after Gemini quota is available
+- visual polish for criteria and comparison matrix interactions
 
 ## Role-Based Implementation Order
 
 ### Frontend
 
-1. Add visible numbers to product cards in `frontend/Amazon/`.
-2. Add selected-card state and multi-select by click.
-3. Add number input selection, such as `2, 5, 8`.
-4. Render compact evidence overlays on selected cards.
-5. Add expandable source snippets.
-6. Add comparison tray.
-7. Add repair/undo UI.
-8. Add study logging hooks.
+1. Keep the left filter sidebar visible on all search/listing result pages.
+2. Expose every backend-searchable catalog filter in the sidebar.
+3. Render parsed AI criteria and clarification options from backend responses.
+4. Keep product detail navigation on image/name click.
+5. Add/remove products from the result grid into the comparison matrix.
+6. Add repair/undo UI for AI criteria changes.
+7. Add study logging hooks for every user-visible state transition.
 
 ### Backend
 
-1. Extend Supabase schema/API as frontend and AI contracts evolve.
-2. Keep migrations and seed data reproducible.
-3. Maintain Amazon and Netflix API docs.
-4. Add item/review/evidence logging APIs when AI contracts are finalized.
+1. Keep Amazon Reviews 2023 schema, importer, verifier, and semantic enrichment reproducible.
+2. Keep migrations focused on shopping catalog, review, evidence, semantic attributes, and study logs.
+3. Maintain Amazon API docs.
+4. Validate AI-generated filters against dataset-backed taxonomy and attributes.
 5. Document deployment in `backend/deployment/`.
-6. Deploy backend or document local setup.
 
 ### AI Natural-Language Request Agent
 
 1. Define command-to-task request schema.
-2. Parse visible numbers, item attributes, criteria, and repair commands.
+2. Parse product criteria, ambiguity, repair commands, and visible UI context.
 3. Generate backend task requests.
-4. Provide examples for Amazon and Netflix commands.
+4. Provide examples for Amazon product-search commands.
 
 ### AI Display Agent
 
 1. Define display payload schema.
-2. Transform returned evidence into overlay/tray payloads.
+2. Transform returned evidence into criteria, comparison, and snippet payloads.
 3. Add uncertainty/provenance display fields.
 4. Provide examples for frontend integration.
 
 ## Data Notes
 
-Keep small frontend fallback data app-local, but use backend fixtures as the source of truth when a demo depends on API-backed data.
+Backend Amazon Reviews 2023 data is the source of truth when the demo depends on API-backed data.
 
-- `frontend/Amazon/products.json`: frontend fallback fixture only.
-- `frontend/Amazon/review.json`: frontend fallback fixture only.
-- `backend/fixtures/amazon-human/`: Amazon human-authored batch seed with products, reviews, review profiles, attribute taxonomy, issue evidence, and progress log.
-- `frontend/Netflix/data.json`: Netflix frontend/backend seed source.
+- `backend/fixtures/amazon-human/`: legacy synthetic Amazon AI-ready package retained for historical QA only.
+- Amazon Reviews 2023 fashion data is imported into Supabase through the Amazon 2023 dataset scripts.
+- Do not commit raw downloaded datasets, generated reports, local DB backups, or fallback image binaries.
 
-Amazon product/review data is imported into Supabase by `npm run db:seed:amazon`. Before study use, check:
+Before study use, check:
 
-- generated product rating matches review rating averages
-- review profile coverage is complete
-- negative and neutral evidence ratios remain high enough for tradeoff comparison
-- evidence text is present in the review body
-- final gold/evaluation rows have human review approval if used for formal evaluation
+- product, image URL, price, brand, category, attribute, and review coverage
+- semantic attribute coverage and confidence distribution
+- category-context mismatches for common user queries
+- review evidence grounding for comparison snippets
+- Gemini quota/error behavior and fallback user messaging
 
 ## Logging Events Needed
 
@@ -154,55 +118,12 @@ For user study, log:
 - search/category/filter changes
 - detail modal open/close
 - product select/deselect
-- overlay shown
-- snippet expanded
+- parsed criteria shown
+- clarification selected
+- comparison matrix updated
 - repair command
 - undo
 - final choice
-
-For the static prototype, logs can be kept in memory and exported as JSON.
-
-## Cross-Role Contracts
-
-### Frontend To AI NL Agent
-
-Frontend should provide:
-
-- raw user command
-- current demo name
-- visible UI registry
-- current selected items
-- current study condition
-
-### AI NL Agent To Backend
-
-AI request agent should provide:
-
-- intent
-- selected item references
-- criteria
-- filters
-- repair operation, if any
-- requested data type
-
-### Backend To AI Display Agent
-
-Backend should provide:
-
-- item metadata
-- review/evidence snippets
-- generated summaries, if available
-- confidence or uncertainty metadata
-
-### AI Display Agent To Frontend
-
-Display agent should provide:
-
-- overlays
-- comparison tray entries
-- snippet groups
-- warnings or uncertainty cues
-- display mode
 
 ## Branching
 

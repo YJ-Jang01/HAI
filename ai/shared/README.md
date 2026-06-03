@@ -1,14 +1,18 @@
 # AI Shared
 
-Shared schemas, examples, and contracts for AI modules.
+Shared helpers and contract models for the optional Python AI modules.
 
-## What Belongs Here
+## Files
 
-- Request schemas.
-- Display model schemas.
-- Example payloads.
-- Shared terminology.
+- `models.py`: shared Pydantic request/response models.
+- `env.py`: environment variable loading helpers.
+- `db.py`: shared database/client helper for experiments.
 
 ## Rule
 
-If both AI modules need the same shape, document it here rather than duplicating it in each module.
+Do not duplicate request or display shapes independently across AI modules. If a shared shape changes, update:
+
+- `ai/shared/models.py`
+- `backend/api-docs/amazon-ai-api.md`
+- `backend/api-docs/amazon2023-api.md`
+- `docs/SERVICE_DATA_FLOW.md`

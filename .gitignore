@@ -6,10 +6,23 @@ node_modules/
 dist/
 .vite/
 coverage/
+.codex-tmp/
+.playwright-cli/
+.vercel/
+.netlify/
+backend/backups/
+backend/datasets/
+backend/reports/
+frontend/*/test-results/
+amazon_com_best_sellers_2025_01_27/
+amazon_com_best_sellers_2025_01_27.zip
 
 *.log
+*.pid
 *.sqlite3
 __pycache__/
 
 venv/
 **/venv/
+.venv/
+**/.venv/

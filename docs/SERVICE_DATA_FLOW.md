@@ -12,40 +12,29 @@ The key idea is simple: users can speak in natural language, but the system must
 - The LLM never builds arbitrary backend endpoint URLs.
 - The backend is the gatekeeper for query planning, schema validation, filtering, pagination, logging, and data minimization.
 - Supabase remains the source of truth for catalog, attributes, reviews, profiles, evidence, and interaction logs.
-- The frontend receives only UI-ready product data, interpretation text, limited evidence previews, and next-action options.
+- The frontend receives only UI-ready parsed criteria, clarification options, product summaries, comparison rows, and next-action options.
 
 ## Service Ownership
 
 ```mermaid
 flowchart LR
-  User["User"]
-  FE["Amazon frontend"]
-  BE["Backend API"]
-  NL["NL request agent"]
-  DB[("Supabase Postgres")]
-  DA["Display agent"]
-  Logs[("interaction_logs")]
+  User[User] --> FE[frontend/Amazon]
 
-  User --> FE
-  FE --> BE
-  BE --> NL
-  NL --> BE
-  BE --> DB
-  DB --> BE
-  BE --> DA
-  DA --> BE
-  BE --> FE
-  FE --> User
-  BE --> Logs
+  FE -->|raw natural language + UI context| BE[backend API]
+  BE -->|available filters + facet basis| NL[ai/nl-request-agent]
+  NL -->|structured intent candidate| BE
+
+  BE -->|validated query plan| DB[(Supabase Postgres)]
+  DB -->|products, attributes, reviews, evidence| BE
+
+  BE -->|candidate comparison subset| DA[ai/display-agent]
+  DA -->|UI-ready matrix labels/summary payload| BE
+
+  BE -->|minimal response payload| FE
+  FE -->|parsed criteria, grid, bottom matrix, detail views| User
+
+  BE -->|study/runtime events| Logs[(interaction_logs)]
 ```
-
-Flow meaning:
-
-- Frontend sends the raw natural-language request and current UI context to backend.
-- Backend sends constrained filter/taxonomy context to the NL request agent.
-- Backend validates the returned intent before querying Supabase.
-- Backend sends only scoped candidate data to the display agent.
-- Frontend receives a compact UI-ready payload.
 
 ## Runtime Sequence
 
@@ -58,48 +47,52 @@ sequenceDiagram
   participant DB as Supabase
   participant DA as Display Agent
 
-  U->>FE: Enter natural-language request
-  FE->>BE: Send AI query request
-  Note over FE,BE: query, current filters, visible products, session id
+  U->>FE: Natural-language request
+  FE->>BE: POST /api/ai/amazon/interpret
+  Note over FE,BE: raw query, current filters, visible products, session id
 
   BE->>DB: Fetch constrained facets and allowed taxonomy
-  DB-->>BE: Return price, rating, and attribute summaries
+  DB-->>BE: Price/rating/attribute summaries
 
   BE->>NL: Interpret query with allowed fields and facet basis
-  NL-->>BE: Return structured intent candidate
+  NL-->>BE: Structured intent candidate
 
   BE->>BE: Validate schema, allowlist fields, cap limits
   BE->>BE: Convert subjective terms into objective filters
 
+  BE-->>FE: queryId, parsed criteria, clarification options
+  FE-->>U: Show parsed criteria while product query starts
+
+  FE->>BE: POST /api/ai/amazon/query with queryId
   BE->>DB: Query products, assets, attributes, reviews, evidence
-  DB-->>BE: Return candidate rows and evidence rows
+  DB-->>BE: Candidate rows and compact comparison data
 
   BE->>BE: Aggregate issue/profile/risk summaries
-  BE->>DA: Generate optional display payload
-  DA-->>BE: Return overlay and tray payload
+  BE->>DA: Optional display-payload generation
+  DA-->>BE: Matrix/display payload
 
   BE->>DB: Log query interpretation and UI event metadata
-  BE-->>FE: Return minimal UI-ready response
-  FE-->>U: Render products, interpretation, overlays, next actions
+  BE-->>FE: Minimal UI-ready response
+  FE-->>U: Render products, criteria controls, and bottom comparison matrix
 ```
 
 ## Backend Pipeline
 
 ```mermaid
 flowchart TD
-  A["Receive natural-language request"] --> B["Normalize frontend context"]
-  B --> C["Load allowed taxonomy and current facets"]
-  C --> D["Call NL request agent"]
-  D --> E["Validate structured intent"]
-  E --> F{"Needs clarification?"}
-  F --> G["Return clarification options"]
-  F --> H["Build safe query plan"]
-  H --> I["Run allowlisted Supabase queries"]
-  I --> J["Build product summaries"]
-  J --> K["Select limited evidence previews"]
-  K --> L["Build display payload"]
-  L --> M["Log interaction"]
-  M --> N["Return UI-ready response"]
+  A[Receive natural-language request] --> B[Normalize frontend context]
+  B --> C[Load allowed taxonomy and current facets]
+  C --> D[Call NL request agent]
+  D --> E[Validate structured intent]
+  E --> F{Needs clarification?}
+  F -->|yes| G[Return parsed criteria and clarification options]
+  F -->|no| H[Build safe query plan]
+  H --> I[Run allowlisted Supabase queries]
+  I --> J[Build product summaries]
+  J --> K[Build compact comparison candidates]
+  K --> L[Build display/matrix payload]
+  L --> M[Log interaction]
+  M --> N[Return UI-ready response]
 ```
 
 ## Example User Scenario
@@ -286,34 +279,32 @@ Backend may use rich internal data, but frontend responses should stay small.
 
 Recommended response limits:
 
-- Search result: 12-24 products.
-- Evidence preview: 0-2 snippets per product.
+- Interpretation result: parsed criteria, clarification options, and result-count estimates only.
+- Search result: 12-36 products.
+- Product card AI data: compact match tags and ranking number only.
 - Top issue/risk labels: 1-3 per product.
-- Compare tray: 2-4 selected products.
+- Compare matrix: 2-4 selected products.
 - Product detail: lazy-load full details only when the user opens the modal.
 
 ## Lazy Loading Strategy
 
 ```mermaid
 flowchart LR
-  Q["AI query request"] --> R["Compact search results"]
-  R --> E["Evidence detail request"]
-  R --> C["Compare request"]
-  R --> D["Product detail request"]
+  I[POST /api/ai/amazon/interpret] --> P[Parsed criteria + clarification chips]
+  P --> Q[POST /api/ai/amazon/query]
+  Q --> R[Search results with compact match tags]
+  R --> C[POST /api/ai/amazon/compare]
+  R --> D[GET /api/demos/amazon/products/:productId]
+  R -. optional .-> E[GET /api/ai/amazon/query/:queryId/items/:productId/evidence]
 
-  E --> EP["More evidence for one card"]
-  C --> CP["Comparison tray payload"]
-  D --> DP["Full product detail modal"]
+  E --> EP[Detailed provenance if a future UI needs it]
+  C --> CP[Bottom comparison matrix payload]
+  D --> DP[Full product detail modal]
 ```
 
-The first response should be fast and compact. Detailed evidence, full reviews, and complete product details should be requested only after user intent is clear.
+The first response should be fast and compact. The parsed criteria response arrives before the heavier product query, allowing ambiguous attributes to be adjusted while the backend continues querying the non-ambiguous constraints.
 
-Endpoint mapping:
-
-- AI query request: `POST /api/ai/amazon/query`
-- Evidence detail request: `GET /api/ai/amazon/query/:queryId/items/:productId/evidence`
-- Compare request: `POST /api/ai/amazon/compare`
-- Product detail request: `GET /api/demos/amazon/products/:productId`
+Explicit numeric ranges such as `under $120` are treated as hard filters. If no products match a hard range, the backend should preserve the range and let the user broaden it through clarification chips instead of silently returning out-of-range products.
 
 ## Endpoint Direction
 
@@ -322,6 +313,7 @@ The current backend already has page-data endpoints under `/api/demos/amazon/*`.
 Suggested AI-facing endpoints:
 
 ```text
+POST /api/ai/amazon/interpret
 POST /api/ai/amazon/query
 GET  /api/ai/amazon/query/:queryId/items/:productId/evidence
 POST /api/ai/amazon/compare
@@ -351,7 +343,7 @@ Backend must enforce:
 - No raw SQL generated by an LLM.
 - No arbitrary endpoint or table access generated by an LLM.
 - No hidden prompt/debug data in study-mode responses.
-- Interaction logging for user query, interpreted rules, selected items, overlays shown, refinements, and final choice.
+- Interaction logging for user query, parsed criteria shown, clarification choices, selected items, matrix updates, refinements, and final choice.
 
 ## Frontend Responsibilities
 
@@ -360,9 +352,10 @@ Frontend should:
 - Collect the raw user request.
 - Send current UI context: current filters, visible product IDs, selected product IDs, and session ID.
 - Render the backend response without inventing new evidence.
-- Show applied AI interpretation in plain language.
+- Show parsed criteria and clarification chips in plain language.
 - Render product images from backend `imageUrl` or `assets.primary`.
-- Render evidence previews close to the relevant product card.
+- Keep product image/name clicks as product detail navigation.
+- Let the user add/remove products from the result grid into the bottom comparison matrix.
 - Let the user refine, repair, compare, or open full details.
 - Never call the LLM provider directly.
 

@@ -1,36 +1,52 @@
 # Display Agent
 
-Owner: AI Developer 2.
+Experimental Python service for turning backend/AI evidence into UI-ready display payloads. The current AImazon frontend builds the active display state directly in React from backend responses, so this service is optional unless the team extracts display planning into a separate process.
 
-## Responsibility
+## Intended Responsibility
 
-Transform backend/AI results into UI-ready display decisions that support the project goal: efficient in-place comparison.
+- Transform product, review, evidence, and AI criteria data into display decisions.
+- Propose overlays, matrix rows, evidence snippets, warnings, and uncertainty cues.
+- Keep user control visible and avoid deciding the final product choice for the user.
 
-## Inputs
+## Example Output Shape
 
-- Backend item data.
-- Review snippets or evidence sources.
-- AI summaries or generated comparison output.
-- Current frontend selection state.
-- Current study condition.
+```json
+{
+  "displayMode": "comparison_matrix",
+  "matrixRows": ["price", "brand", "comfortLevel", "fit", "reviewStrengths"],
+  "overlays": [
+    {
+      "itemId": "B000EXAMPLE",
+      "summary": "Strong comfort evidence, limited durability evidence.",
+      "evidenceCount": 3
+    }
+  ],
+  "warnings": ["Low review evidence for one selected item."]
+}
+```
 
-## Outputs
+## Local Run
 
-UI-ready display model:
+```powershell
+cd ai/display-agent
+uv run uvicorn main:app --host 127.0.0.1 --port 8012
+```
 
-- overlays
-- comparison tray entries
-- snippet expansion data
-- warnings or uncertainty cues
-- repair suggestions
+If used, provide a Gemini key through environment or a local `.env`:
 
-## Initial Display Modes
+```text
+GEMINI_API_KEY=<key>
+```
 
-- `in_place_overlay`
-- `comparison_tray`
-- `chat_panel`
-- `detail_modal_summary`
+## Files
 
-## Development Notes
+- `main.py`: FastAPI entrypoint.
+- `agent.py`: display payload generation logic.
+- `pyproject.toml`: Python dependencies.
 
-The display agent should not decide the user's final choice. It should expose evidence clearly and keep user control visible.
+## Current Frontend Counterpart
+
+The currently implemented display behavior lives in:
+
+- `frontend/Amazon/src/App.jsx`: `ComparisonMatrix`, `ComparisonInsights`, `ComparisonMatrixDock`, `ProductCard`, `DetailModal`, `CartPage`.
+- `backend/src/routes/amazon2023-ai.ts`: comparison values and evidence availability.

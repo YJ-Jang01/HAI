@@ -2,21 +2,26 @@ import cors from "cors";
 import express from "express";
 
 import { sendError } from "./lib/http.js";
-import { amazonRouter } from "./routes/amazon.js";
+import { amazon2023Router } from "./routes/amazon2023.js";
+import { amazon2023AiRouter } from "./routes/amazon2023-ai.js";
 import { logsRouter } from "./routes/logs.js";
-import { netflixRouter } from "./routes/netflix.js";
 
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const localDevOrigins =
+  process.env.NODE_ENV === "production"
+    ? []
+    : ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:5173", "http://127.0.0.1:5173"];
+const allowedOrigins = new Set([...configuredOrigins, ...localDevOrigins]);
 
 export const app = express();
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.size === 0 || allowedOrigins.has(origin)) {
         callback(null, true);
         return;
       }
@@ -31,8 +36,10 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.use("/api/demos/netflix", netflixRouter);
-app.use("/api/demos/amazon", amazonRouter);
+app.use("/api/demos/amazon", amazon2023Router);
+app.use("/api/demos/amazon2023", amazon2023Router);
+app.use("/api/ai/amazon", amazon2023AiRouter);
+app.use("/api/ai/amazon2023", amazon2023AiRouter);
 app.use("/api/logs", logsRouter);
 
 app.use((_req, res) => {

@@ -1,132 +1,111 @@
 # Supabase
 
-This directory is for Supabase setup notes and optional Supabase-native files. The current source of truth for the database schema is `backend/drizzle/` plus the matching Drizzle schema in `backend/src/db/schema.ts`.
+Supabase is used as managed Postgres for the AImazon Amazon Reviews 2023 Fashion dataset. The browser never connects directly to Supabase; `backend/` is the only runtime that should use `DATABASE_URL`.
 
-## What Belongs Here
+## Source Of Truth
 
-- SQL migrations, if we later split migrations beyond `backend/drizzle/`.
-- Seed data notes.
-- Supabase local config.
-- Edge functions, if the project uses them.
-- Schema setup instructions.
+- Drizzle schema: `backend/src/db/schema.ts`
+- SQL migrations: `backend/drizzle/`
+- Runtime API: `backend/src/routes/amazon2023.ts` and `backend/src/routes/amazon2023-ai.ts`
+- Import/enrichment scripts: `backend/scripts/`
 
-## Current Setup Choice
+## Free Plan Constraints
 
-Use Supabase as managed Postgres and Node.js as the API layer.
+The current planning target is Supabase Free:
 
-- Frontend calls Node.js endpoints.
-- Node.js connects to Supabase Postgres with `DATABASE_URL`.
-- `npm run db:migrate` creates tables, constraints, and indexes.
-- `npm run db:seed:amazon` uploads the current Amazon human-authored batch fixture from `backend/fixtures/amazon-human/` into Supabase.
-- `npm run db:seed:netflix` uploads `frontend/Netflix/data.json` into Supabase.
+- Database: 500 MB
+- Storage: 1 GB
 
-Do not put Supabase service-role keys in frontend code. The browser should not connect directly to the database for this project structure.
+Operational rules:
 
-## Supabase Project Creation
+- Store product image URLs in Postgres.
+- Store fallback thumbnails in Supabase Storage only for products whose remote image URLs fail.
+- Do not store image binaries in Postgres.
+- Do not duplicate raw metadata blobs or full review text in new semantic tables.
+- Store semantic attributes as compact product-level rows with `score`, `confidence`, `evidenceCount`, sentiment counts, and source.
+- Check DB size before and after migrations/imports.
+- Treat 485-490 MB as the practical warning zone.
+
+## Setup
 
 1. Create a Supabase project.
-2. Save the database password in a private place.
-3. In Supabase, open the database connection string for Postgres.
-4. Use a URI connection string with `sslmode=require`.
-5. Put it in `backend/.env` as `DATABASE_URL`.
+2. Copy a Postgres URI with SSL enabled.
+3. Put it in `backend/.env` as `DATABASE_URL`.
+4. Run migrations from `backend/`.
 
-Example:
+```powershell
+cd backend
+pnpm install
+pnpm run db:migrate
+pnpm run db:verify:amazon2023
+```
+
+Example placeholder:
 
 ```text
-DATABASE_URL=postgresql://postgres.your-project-ref:your-password@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<database>?sslmode=require
+DATABASE_SSL=true
 ```
 
-For this backend, `DATABASE_URL` is required. If the Supabase project is not ready yet, finish the project creation first or use a local Postgres database with the same connection string format.
+Do not commit real credentials.
 
-## Upload Netflix Frontend Data
-
-Run from `backend/`:
-
-```powershell
-npm install
-npm run db:migrate
-npm run db:seed:netflix
-```
-
-The import command maps the current frontend mock data like this:
-
-| Frontend JSON | Database |
-| --- | --- |
-| `name` | `media_items.title`, generated `media_items.slug` |
-| `tag` | `media_tags`, `media_item_tags` |
-| `img` | `media_assets` as `thumbnail` and `hero` |
-| `video` | `media_assets` as `preview_video` |
-| `desc` | `media_items.description` |
-| `episodes[]` | `media_episodes` |
-
-The existing Netflix rows are split into five shelves with six items each to match the current demo page layout.
-
-## Upload Amazon Human-Authored Batch Data
-
-Run from `backend/`:
-
-```powershell
-npm install
-npm run db:migrate
-npm run db:seed:amazon
-```
-
-The import command maps the current human-authored batch fixture data like this:
-
-| Fixture JSON | Database |
-| --- | --- |
-| `fixtures/amazon-human/attribute_taxonomy.json` | `product_attribute_definitions`, `product_attribute_options` |
-| `batches/*.json.products[]` | `products`, `product_assets`, `product_features`, `product_option_groups`, `product_rating_breakdown`, `product_attribute_values` |
-| `batches/*.json.reviews[]` | `product_reviews` |
-| `batches/*.json.reviewProfiles[]` | `product_review_profiles` |
-| `batches/*.json.reviewEvidence[]` | `product_review_evidence` |
-
-## Normalization Rule
-
-Use 4NF for core catalog data. Do not store independent multi-valued facts as arrays or repeated columns. For example, product assets, features, options, rating buckets, reviews, media tags, shelf membership, and episodes should be separate relations.
-
-API responses may be nested JSON for frontend convenience, but database tables should remain normalized.
-
-Netflix schema details are documented in:
-
-- `backend/api-docs/amazon-demo-api.md`
-- `backend/api-docs/netflix-demo-api.md`
-
-## Current Amazon Tables
-
-- `product_categories`
-- `product_subcategories`
-- `products`
-- `product_assets`
-- `product_features`
-- `product_option_groups`
-- `product_option_values`
-- `product_rating_breakdown`
-- `product_reviews`
-
-## Current Netflix Tables
+## Current Tables
 
 - `demo_sites`
-- `media_items`
-- `media_tags`
-- `media_item_tags`
-- `media_assets`
-- `media_episodes`
-- `media_episode_assets`
-- `media_hero_items`
-- `media_shelves`
-- `media_shelf_items`
 - `interaction_logs`
+- `shopping_datasets`
+- `shopping_categories`
+- `shopping_products`
+- `shopping_product_category_paths`
+- `shopping_product_images`
+- `shopping_product_attributes`
+- `shopping_product_semantic_attributes`
+- `shopping_product_search_documents`
+- `shopping_reviews`
+- `shopping_review_evidence`
+- `shopping_import_runs`
+- `shopping_seed_size_samples`
 
-## Recommended Indexes
+## Amazon 2023 Import Flow
 
-Add indexes for lookup, join, filtering, and ordering paths used by the APIs.
+Run only after backing up any Supabase data that should be preserved:
 
-Netflix demo indexes are documented in:
+```powershell
+cd backend
+pnpm run db:backup:supabase -- -IUnderstandFullRowBackup
+pnpm run dataset:profile:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz>
+pnpm run dataset:plan:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz> --out reports/amazon2023-seed-plan.json --db-budget-mb 500
+pnpm run dataset:import:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz> --selection-plan reports/amazon2023-seed-plan.json
+pnpm run dataset:semantic:schema:amazon2023
+pnpm run dataset:semantic:amazon2023 -- --dataset-slug amazon-fashion-2023 --mode apply --max-db-mb 490
+pnpm run db:verify:amazon2023 -- --dataset-slug amazon-fashion-2023 --max-db-mb 490
+```
 
-- `backend/api-docs/amazon-demo-api.md`
-- `backend/api-docs/netflix-demo-api.md`
+## Verification Commands
 
-## Rule
+```powershell
+pnpm run db:verify:amazon2023
+pnpm run dataset:images:amazon2023
+pnpm run ai:qa:amazon2023
+pnpm run clarification:qa:amazon2023
+```
 
-Do not manually edit production data during study runs. Use migrations and seed files so the setup is reproducible.
+`db:verify:amazon` is an alias to the Amazon 2023 verifier for compatibility. Prefer `db:verify:amazon2023`.
+
+## Indexing Rule
+
+Keep indexes tied to frontend and AI query paths:
+
+- product/category lookup
+- price/rating sort and filters
+- search document lookup
+- high-frequency semantic filters such as gender, occasion, season, style, material
+- evidence lookup by product and attribute key
+
+Avoid broad indexes that push the Free plan database over the size target.
+
+## Study Safety
+
+- Do not reseed during a study run unless logs and catalog state are backed up.
+- Do not manually edit production rows during a study.
+- Do not put service-role keys, database passwords, participant data, or private logs into frontend files.

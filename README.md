@@ -1,126 +1,157 @@
 # HAI
 
-Human-AI Interaction project built around two demo web sites:
+Human-AI Interaction project for the AImazon shopping and product-comparison study.
 
-- `frontend/Amazon/`: shopping/product-comparison demo. This is the main development target.
-- `frontend/Netflix/`: media/OTT demo. This is the secondary demo target.
+The active implementation is an Amazon Fashion shopping prototype backed by the Amazon Reviews 2023 Fashion dataset in Supabase. The main user-facing goal is to let participants search, refine ambiguous natural-language criteria, compare products in place, inspect review evidence, add an item to cart, and reach the checkout handoff point without leaving the shopping flow.
 
-The demo names are temporary. The code should keep working inside these two demo directories until the project is renamed.
+## Current Feature Set
 
-## Project Direction
+- Amazon-style home page with department navigation, search, account/cart affordances, and product shelves.
+- Regular catalog search with persistent left-side filters.
+- AI Criteria Lens search mode toggled from the search bar.
+- Korean and English query support, with UI/product/review copy localized to the active language.
+- Gemini-backed natural-language decomposition when `GEMINI_API_KEY` is available.
+- Dataset-grounded parsed criteria, clarification chips, and result refresh through backend APIs.
+- Product cards with compare selection.
+- Bottom-docked comparison matrix with common ground, key differences, partial shared traits, sortable product columns, removable products, and review/source snippet expansion.
+- Product detail modal with review section and Add to Cart.
+- Cart page with item quantity, subtotal, recommendations, and a checkout button placeholder for the future Google Docs handoff.
+- Study event logging through `POST /api/logs`.
 
-The current main feature direction is **GroundedCompare**:
+## Run Locally
 
-> AI evidence overlays that help users compare multiple visible items directly inside a dense result grid.
+Start the backend:
 
-For the shopping demo, this means users should eventually be able to select multiple product cards, see evidence-backed summaries attached to those cards, inspect review snippets, compare items in place, and make a final decision without repeatedly opening detail pages.
+```powershell
+cd backend
+pnpm install
+Copy-Item .env.example .env
+# Fill DATABASE_URL and optionally GEMINI_API_KEY in backend/.env.
+pnpm run db:migrate
+pnpm run db:verify:amazon2023
+pnpm run dev
+```
 
-## Simple Directory Structure
+Start the frontend:
+
+```powershell
+cd frontend/Amazon
+pnpm install
+pnpm run dev
+```
+
+Open `http://127.0.0.1:8000`. The backend is expected at `http://127.0.0.1:8002`.
+
+Useful verification commands:
+
+```powershell
+cd backend
+pnpm run check
+pnpm run build
+pnpm run db:verify:amazon2023
+pnpm run ai:qa:amazon2023
+
+cd ..\frontend\Amazon
+pnpm run build
+pnpm run e2e:amazon2023
+```
+
+## Project Structure
 
 ```text
 .
 |-- README.md
 |-- AGENTS.md
+|-- docs/
+|   |-- screenshots/
+|   |-- PROJECT.md
+|   |-- IMPLEMENTATION.md
+|   |-- SERVICE_DATA_FLOW.md
+|   |-- STUDY.md
+|   `-- archive/
 |-- frontend/
-|   |-- Amazon/
-|   `-- Netflix/
+|   `-- Amazon/
+|       |-- src/App.jsx
+|       |-- src/data.js
+|       |-- src/styles.css
+|       `-- scripts/e2e-amazon2023-cdp.mjs
 |-- backend/
+|   |-- src/
+|   |-- scripts/
+|   |-- drizzle/
+|   |-- api-docs/
 |   |-- supabase/
-|   |-- deployment/
-|   `-- api-docs/
-|-- ai/
-|   |-- nl-request-agent/
-|   |-- display-agent/
-|   `-- shared/
-`-- docs/
-    |-- PROJECT.md
-    |-- IMPLEMENTATION.md
-    |-- ROLES.md
-    |-- BRANCHING.md
-    |-- STUDY.md
-    `-- archive/
+|   `-- deployment/
+`-- ai/
+    |-- nl-request-agent/
+    |-- display-agent/
+    `-- shared/
 ```
 
-## Where Things Go
+## Important Files And Functions
 
-- `frontend/Amazon/`: shopping demo code, app-local JSON data, and app-local assets.
-- `frontend/Netflix/`: OTT demo code and app-local JSON data.
-- `backend/`: DB schema, Supabase setup, deployment, and API docs.
-- `ai/nl-request-agent/`: natural-language command recognition and backend task request generation.
-- `ai/display-agent/`: transforms returned data into UI-ready overlay/tray display payloads.
-- `ai/shared/`: shared AI request/response contracts.
-- `docs/PROJECT.md`: product goal, scope, and feature requirements.
-- `docs/IMPLEMENTATION.md`: implementation plan, data/logging notes, and backlog.
-- `docs/ROLES.md`: detailed team responsibility split.
-- `docs/BRANCHING.md`: branch and merge workflow for role-based development.
-- `docs/STUDY.md`: user-study plan and metrics.
-- `docs/archive/`: original proposal or old notes kept only for reference.
-- `AGENTS.md`: short instructions for AI coding agents.
+Frontend:
 
-Do not add new top-level folders unless the project genuinely needs them.
-
-## Running A Demo
-
-Amazon is a React/Vite app:
-
-```powershell
-cd frontend/Amazon
-npm install
-npm run dev
-```
-
-Open `http://127.0.0.1:8000`.
-
-Netflix is a React/Vite app that calls the backend API by default. Run the backend first if you want to use Supabase-backed data.
+- `frontend/Amazon/src/App.jsx`
+  - `Header`: Amazon-style navigation, language toggle, AI toggle, search submit, cart access.
+  - `ProductListing`: search results layout, AI Criteria Lens panel, filter sidebar, grid pagination, comparison dock.
+  - `FilterSidebar`: left-side filter controls for regular and AI results.
+  - `ProductCard`: product card rendering, matched criteria chips, compare button.
+  - `ComparisonMatrix` and `ComparisonMatrixDock`: bottom matrix, common/different traits, sorting, remove actions, source snippets.
+  - `DetailModal`: product detail, options, review list, Add to Cart.
+  - `CartPage`: cart review and checkout handoff placeholder.
+  - `handleSubmit`, `handleFilterChange`, `handleClarifyCriteria`, `handleAddToCart`: primary user-flow handlers.
+- `frontend/Amazon/src/data.js`
+  - `searchCatalogProducts`, `loadCatalogFacets`, `loadProductDetail`: catalog API clients.
+  - `runAiQuery`, `compareAiProducts`, `loadAiEvidence`, `refineAiQuery`: AI Criteria Lens API clients.
+  - `normalizeProduct`: backend payload normalization for UI rendering.
 
 Backend:
 
-```powershell
-cd backend
-npm install
-Copy-Item .env.example .env
-# Fill DATABASE_URL in .env before running migrations.
-npm run db:migrate
-npm run db:seed:amazon
-npm run db:seed:netflix
-npm run dev
-```
+- `backend/src/app.ts`: Express app setup and route mounting.
+- `backend/src/db/schema.ts`: Drizzle schema for Amazon 2023 shopping tables and study logs.
+- `backend/src/routes/amazon2023.ts`: catalog categories, products, facets, and detail endpoints.
+- `backend/src/routes/amazon2023-ai.ts`: AI query, interpret, compare, evidence, and refine endpoints.
+- `backend/src/repositories/amazon2023.ts`: SQL query builders, filters, facets, serialization, product details, semantic attributes.
+- `backend/scripts/import-amazon-2023.ts`: Amazon Reviews 2023 importer.
+- `backend/scripts/enrich-amazon-2023-semantics.ts`: compact product-level semantic enrichment.
+- `backend/scripts/verify-amazon-2023-db.ts`: Supabase size and data-quality verifier.
 
-Verify the backend:
+AI:
 
-```text
-http://127.0.0.1:8002/health
-http://127.0.0.1:8002/api/demos/amazon/home
-http://127.0.0.1:8002/api/demos/netflix/home
-```
+- `ai/nl-request-agent/`: experimental natural-language request parser service.
+- `ai/display-agent/`: experimental UI display payload service.
+- `ai/shared/`: shared schema helpers used by the AI modules.
 
-Netflix frontend:
+## UI Screenshots
 
-```powershell
-cd frontend/Netflix
-npm install
-npm run dev
-```
+The screenshots below were captured against local frontend `127.0.0.1:8000` and backend `127.0.0.1:8002` after waiting for visible images to finish loading or fail over to the product fallback thumbnail.
 
-Open `http://127.0.0.1:8001`.
-
-The frontend uses `VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002` by default. To run Netflix without the backend, create `frontend/Netflix/.env` and set `VITE_USE_MOCK_DATA=true`.
+| Flow | Screenshot |
+| --- | --- |
+| Home | ![AImazon home](docs/screenshots/aimazon-home.png) |
+| Regular search and filters | ![Regular search filters](docs/screenshots/aimazon-search-filters.png) |
+| AI Criteria Lens | ![AI Criteria Lens](docs/screenshots/aimazon-ai-criteria.png) |
+| Comparison matrix | ![Comparison matrix](docs/screenshots/aimazon-comparison-matrix.png) |
+| Review/source snippets | ![Source snippets](docs/screenshots/aimazon-source-snippets.png) |
+| Product detail Add to Cart | ![Product detail add to cart](docs/screenshots/aimazon-detail-add-to-cart.png) |
+| Cart | ![Cart](docs/screenshots/aimazon-cart.png) |
+| Checkout button click | ![Checkout button click](docs/screenshots/aimazon-checkout-click.png) |
 
 ## Branch Workflow
 
-- `main`: stable deployment/demo branch.
-- `dev`: integration branch for active development.
-- fixed role branches: `frontend`, `backend`, `ai-nl`, `ai-display`.
-- each role branch merges into `dev`.
+- `main`: stable branch.
+- `dev`: active integration branch.
+- Fixed role branches: `frontend`, `backend`, `ai-nl`, and `ai-display`.
 
 See `docs/BRANCHING.md`.
 
-## Backend API Docs
+## Documentation Map
 
-Current backend API documentation is focused on page data, schema design, and study logging.
-
-- `backend/api-docs/amazon-demo-api.md`: Amazon demo schema, Mermaid ER diagram, indexes, response models, and endpoint specs.
-- `backend/api-docs/netflix-demo-api.md`: Netflix demo schema, Mermaid ER diagram, indexes, response models, and endpoint specs.
-- `backend/supabase/README.md`: Supabase schema/migration workspace notes.
-
-AI-agent-specific endpoints are not finalized yet. Add them only after the AI request/display contracts are agreed.
+- `frontend/Amazon/README.md`: frontend run guide, UI flows, screenshots, and component roles.
+- `backend/README.md`: API server, Supabase, importer, verifier, and endpoint guide.
+- `backend/api-docs/amazon2023-api.md`: Amazon Reviews 2023 API and data contract.
+- `backend/api-docs/amazon-ai-api.md`: AI Criteria Lens API details.
+- `backend/deployment/amazon2023-cutover-runbook.md`: dataset cutover and backup procedure.
+- `docs/FREE_DEPLOYMENT.md`: Vercel frontend + Render backend free deployment guide.
+- `docs/STUDY.md`: user-study plan and logging requirements.

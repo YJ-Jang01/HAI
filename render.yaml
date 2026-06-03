@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: aimazon-backend
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: node dist/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: "0.0.0.0"
+      - key: DATABASE_SSL
+        value: "true"
+      - key: AI_AMAZON2023_LLM
+        value: "on"
+      - key: AI_AMAZON2023_LLM_TIMEOUT_MS
+        value: "4500"
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

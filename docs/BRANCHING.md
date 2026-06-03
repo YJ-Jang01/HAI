@@ -56,7 +56,6 @@ Do not create many task-specific branches unless the team explicitly decides to 
 Primary paths:
 
 - `frontend/Amazon/`
-- `frontend/Netflix/`
 
 Needs review from backend or AI if API contracts or AI payload rendering changes.
 

@@ -1,97 +1,57 @@
 # Frontend
 
-Frontend owns the demo sites and the mock data that fills those sites.
+Frontend currently owns one active app: `frontend/Amazon/`.
 
-## Responsibilities
+## Scope
 
-- Implement and maintain the `Amazon` shopping demo.
-- Implement and maintain the `Netflix` media demo.
-- Create app-local mock data for demos.
-- Build UI states for baseline, chat-only AI, and in-place AI evidence overlay conditions.
-- Integrate backend API responses and AI display-agent outputs into the screen.
-- Add interaction logging hooks required by the study.
+- Render the AImazon shopping experience.
+- Support regular search and AI Criteria Lens search from the same header search bar.
+- Keep the left filter sidebar available on listing/search pages.
+- Let users select 2-4 products and compare them in a bottom-docked matrix.
+- Open dataset-backed review/source snippets from the matrix.
+- Support product detail, Add to Cart, cart review, and checkout-button study flow.
+- Send study events to the backend logging API.
 
-## Directory Layout
+## Layout
 
 ```text
 frontend/
-|-- Amazon/
-`-- Netflix/
+|-- README.md
+`-- Amazon/
+    |-- README.md
+    |-- package.json
+    |-- src/
+    |   |-- App.jsx
+    |   |-- data.js
+    |   `-- styles.css
+    `-- scripts/
+        `-- e2e-amazon2023-cdp.mjs
 ```
 
-## Demo Ownership
+## Run
 
-### `Amazon/`
-
-Main development target for product comparison and evidence overlays.
-
-Expected work:
-
-- numbered product cards
-- multi-item selection
-- in-place evidence overlays
-- comparison tray
-- source snippet expansion
-- study logging hooks
-
-### `Netflix/`
-
-Secondary media demo.
-
-Expected work:
-
-- OTT/media card interactions
-- ambiguous selection examples
-- media mock data
-- optional numbered candidate overlay
-
-## Data Rule
-
-Keep mock data inside each demo while it is app-specific:
-
-- `frontend/Amazon/products.json`
-- `frontend/Amazon/review.json`
-- `frontend/Netflix/data.json`
-
-Move data to a shared location only if both frontend and backend need the exact same fixture.
-
-## Run Locally
-
-Amazon is a React/Vite app:
+Start the backend first, then run:
 
 ```powershell
 cd frontend/Amazon
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 Open `http://127.0.0.1:8000`.
 
-Netflix is a React/Vite app. By default it calls the backend API, so start `backend/` first when testing the integrated flow.
-
-Backend:
+Build and browser validation:
 
 ```powershell
-cd backend
-npm install
-npm run db:migrate
-npm run db:seed:netflix
-npm run dev
+pnpm run build
+pnpm run e2e:amazon2023
 ```
 
-Netflix frontend:
+## Main Implementation Files
 
-```powershell
-cd frontend/Netflix
-npm install
-npm run dev
-```
+- `Amazon/src/App.jsx`: UI components and state transitions for search, filters, AI Criteria Lens, comparison, product detail, cart, language mode, and toasts.
+- `Amazon/src/data.js`: backend API client and payload normalization.
+- `Amazon/scripts/e2e-amazon2023-cdp.mjs`: headless Chrome/CDP user-flow validation.
+- `../docs/screenshots/`: README screenshot artifacts captured from the local app.
 
-Open `http://127.0.0.1:8001`.
-
-Use `frontend/Netflix/.env` only when overriding the backend URL or forcing mock data:
-
-```text
-VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002
-VITE_USE_MOCK_DATA=false
-```
+See `frontend/Amazon/README.md` for component/function details and the screenshot gallery.

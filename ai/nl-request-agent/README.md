@@ -1,39 +1,51 @@
 # Natural-Language Request Agent
 
-Owner: AI Developer 1.
+Experimental Python service for natural-language intent extraction. The active AImazon runtime currently uses the Node backend route `backend/src/routes/amazon2023-ai.ts` and calls Gemini directly, so this service is optional unless the team decides to extract NL parsing into a separate process again.
 
-## Responsibility
+## Intended Responsibility
 
-Convert natural-language user input into a structured task request for backend/AI processing.
+- Convert user text into structured search or comparison intent.
+- Identify selected item references.
+- Extract criteria, filters, and repair/refine commands.
+- Return only backend-executable fields that can be validated against catalog taxonomy and semantic attributes.
 
-## Inputs
+## Example Output Shape
 
-- Raw user command.
-- Current demo name: `Amazon` or `Netflix`.
-- Visible UI registry from frontend.
-- Current selected items, if any.
-- Current study condition, if any.
+```json
+{
+  "intent": "compare_items",
+  "targetDemo": "Amazon",
+  "selectedItems": [
+    { "type": "visible_number", "value": 2 },
+    { "type": "visible_number", "value": 5 }
+  ],
+  "criteria": ["comfort", "fit", "review_risks"],
+  "filters": {
+    "priceMax": 120,
+    "genderTarget": ["women"]
+  }
+}
+```
 
-## Outputs
+## Local Run
 
-Structured request object:
+```powershell
+cd ai/nl-request-agent
+uv run uvicorn main:app --host 127.0.0.1 --port 8011
+```
 
-- intent
-- selected item references
-- criteria
-- filters
-- repair operation, if any
-- required backend data
+If used, provide a Gemini key through environment or a local `.env`:
 
-## Initial Intents
+```text
+GEMINI_API_KEY=<key>
+```
 
-- `select_items`
-- `compare_items`
-- `filter_evidence`
-- `repair_selection`
-- `clear_selection`
-- `request_details`
+## Files
 
-## Development Notes
+- `main.py`: FastAPI entrypoint.
+- `agent.py`: parser logic and Gemini interaction.
+- `pyproject.toml`: Python dependencies.
 
-Start rule-based if needed. LLM integration can be added later, but the output contract should stay stable.
+## Rule
+
+Do not let this service execute arbitrary filters. Backend must still validate any returned intent against Amazon 2023 product fields, facets, semantic attributes, and review evidence.

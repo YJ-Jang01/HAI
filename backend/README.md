@@ -1,235 +1,175 @@
 # Backend
 
-Backend owns the Node.js API server, database schema, Supabase setup, deployment, and API documentation.
+Node.js/Express API server for the AImazon Amazon Reviews 2023 Fashion dataset, AI Criteria Lens orchestration, Supabase Postgres access, and study logging.
 
 ## Responsibilities
 
-- Design the database schema as Drizzle schema and SQL migrations.
-- Build and configure Supabase Postgres.
-- Manage migrations and seed data imports.
-- Define APIs used by frontend and AI modules.
-- Deploy backend services.
-- Write and maintain API documentation.
-- Provide stable mock/staging data for frontend and AI integration.
+- Own the normalized shopping schema and Drizzle migrations.
+- Import and verify Amazon Reviews 2023 Fashion data.
+- Store compact semantic product attributes without duplicating raw review text.
+- Serve catalog pages, product details, facets, and filters optimized for the frontend.
+- Run Gemini-backed natural-language interpretation when an API key is configured.
+- Ground AI output against DB-backed filters, taxonomy, semantic attributes, and review evidence.
+- Provide comparison matrix and source snippet APIs.
+- Record user-study interaction logs.
 
-## Directory Layout
-
-```text
-backend/
-|-- README.md
-|-- .env.example
-|-- package.json
-|-- tsconfig.json
-|-- fixtures/
-|-- scripts/
-|-- src/
-|-- drizzle/
-|-- supabase/
-|-- deployment/
-`-- api-docs/
-```
-
-## Local Setup
+## Run Locally
 
 ```powershell
 cd backend
-npm install
+pnpm install
 Copy-Item .env.example .env
-# Set DATABASE_URL in .env first.
-npm run db:migrate
-npm run db:seed:netflix
-npm run db:seed:amazon
-npm run db:verify:amazon
-npm run dev
+# Fill DATABASE_URL. Add GEMINI_API_KEY for LLM-backed AI Criteria Lens.
+pnpm run db:migrate
+pnpm run db:verify:amazon2023
+pnpm run dev
 ```
 
 Open:
 
-- `http://127.0.0.1:8002/api/demos/netflix/home`
-- `http://127.0.0.1:8002/api/demos/netflix/items?tag=action`
-- `http://127.0.0.1:8002/api/demos/amazon/home`
+- `http://127.0.0.1:8002/health`
 - `http://127.0.0.1:8002/api/demos/amazon/products?limit=5`
-- `http://127.0.0.1:8002/api/demos/amazon/products/facets?attribute.warmthLevelMin=4`
+- `http://127.0.0.1:8002/api/demos/amazon/products/facets`
 
-`DATABASE_URL` is required because the backend targets Supabase Postgres directly.
+The Amazon 2023 catalog is mounted at both paths for compatibility:
 
-Keep this process running while the Netflix frontend is open. Local runtime logs appear in the terminal running `npm run dev`; deployed runtime logs will come from the Node host. Supabase logs show database-side activity, not the browser-to-backend request URL.
+- `/api/demos/amazon`
+- `/api/demos/amazon2023`
 
-## Current Supabase Status
+The AI Criteria Lens API is also mounted at both paths:
 
-The current local backend has been verified against the Supabase project configured in `backend/.env`.
+- `/api/ai/amazon`
+- `/api/ai/amazon2023`
 
-Verified commands:
+## Environment Variables
+
+```text
+PORT=8002
+CORS_ALLOWED_ORIGINS=http://127.0.0.1:8000
+DATABASE_URL=postgresql://<user>:<password>@<host>:<port>/<db>?sslmode=require
+DATABASE_SSL=true
+GEMINI_API_KEY=<optional-for-llm-query-decomposition>
+GEMINI_MODEL=gemini-2.5-flash-lite
+AI_AMAZON2023_LLM_TIMEOUT_MS=4500
+AI_AMAZON2023_LLM=on
+```
+
+Never expose `DATABASE_URL`, Supabase service-role keys, or Gemini keys to frontend code.
+
+## Current Database Tables
+
+Defined in `src/db/schema.ts`:
+
+- `demo_sites`
+- `interaction_logs`
+- `shopping_datasets`
+- `shopping_categories`
+- `shopping_products`
+- `shopping_product_category_paths`
+- `shopping_product_images`
+- `shopping_product_attributes`
+- `shopping_product_semantic_attributes`
+- `shopping_product_search_documents`
+- `shopping_reviews`
+- `shopping_review_evidence`
+- `shopping_import_runs`
+- `shopping_seed_size_samples`
+
+## Dataset And Capacity Workflow
+
+Amazon Reviews 2023 Fashion is imported with product rows, image URLs/fallback thumbnails, prices, brands, categories, product attributes, reviews, review evidence, search documents, and compact semantic attributes.
+
+Typical cutover/import flow:
 
 ```powershell
-npm run db:migrate
-npm run db:seed:netflix
-npm run db:seed:amazon
-npm run dev
+cd backend
+pnpm run db:backup:supabase -- -IUnderstandFullRowBackup
+pnpm run db:migrate
+pnpm run dataset:profile:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz>
+pnpm run dataset:plan:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz> --out reports/amazon2023-seed-plan.json --db-budget-mb 500
+pnpm run dataset:import:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz> --selection-plan reports/amazon2023-seed-plan.json
+pnpm run dataset:semantic:schema:amazon2023
+pnpm run dataset:semantic:amazon2023 -- --dataset-slug amazon-fashion-2023 --mode apply --max-db-mb 490
+pnpm run db:verify:amazon2023 -- --dataset-slug amazon-fashion-2023 --max-db-mb 490
 ```
 
-Verified results:
+`db:verify:amazon` is currently an alias for the Amazon 2023 verifier. Prefer `db:verify:amazon2023` in new docs and scripts.
 
-- `drizzle/0000_initial.sql` was applied successfully.
-- `drizzle/0001_amazon_catalog.sql` was applied successfully.
-- `drizzle/0002_amazon_range_indexes.sql` was applied successfully.
-- `drizzle/0003_amazon_ai_attributes.sql` was applied successfully.
-- `drizzle/0004_amazon_review_intelligence.sql` was applied successfully.
-- `drizzle/0005_amazon_review_metadata.sql` was applied successfully.
-- Netflix seed import completed with 30 media items, 3 tags, and 5 shelves.
-- Amazon seed import completed with the v3 AI-ready fixture: 420 products, 7 categories, 40 subcategories, 11,335 reviews, 11,335 review profiles, 28 AI attributes, and 58,371 evidence rows.
-- `npm run db:verify:amazon` confirmed product/review/evidence counts, 5-79 reviews per product, 2-8 evidence rows per review, median product rating 4.2, 273 products rated 4.0+, 26 positive-only products, 34 high-rating low-review products, 186 high-rating products with complaint evidence, complete `primary`/`description`/`brand` image URL coverage for all 420 products, clustered and diverse negative issue patterns, 0 duplicate review bodies, 0 evidence-text mismatches, and 0 category-context mismatches.
-- `GET /health` returned `{ "ok": true }`.
-- `GET /api/demos/netflix/home` returned Supabase-backed Netflix home data.
-- `GET /api/demos/amazon/home` returned Supabase-backed Amazon category data.
+## API Surface
 
-Do not commit `backend/.env`. It contains the Supabase Postgres connection string and DB password.
-
-If the direct Supabase host `db.<project-ref>.supabase.co` fails from a local network, use the Supabase Session Pooler URI instead. Direct connection can require IPv6 network support.
-
-## Frontend Integration Info
-
-Frontend only needs the backend base URL, not Supabase credentials.
-
-Local backend base URL:
+Catalog:
 
 ```text
-http://127.0.0.1:8002
+GET /health
+GET /api/demos/amazon/categories
+GET /api/demos/amazon/products?query=&category=&subCategory=&priceMin=&priceMax=&ratingMin=&brand=&color=&genderTarget=&style=&season=&material=&occasion=&limit=&cursor=
+GET /api/demos/amazon/products/facets?query=&category=&subCategory=&style=&genderTarget=&season=&material=&occasion=
+GET /api/demos/amazon/products/:productId
+GET /api/demos/amazon/products/batch?ids=
 ```
 
-Netflix frontend env:
+AI Criteria Lens:
 
 ```text
-VITE_NETFLIX_API_BASE_URL=http://127.0.0.1:8002
+POST /api/ai/amazon2023/interpret
+POST /api/ai/amazon2023/query
+POST /api/ai/amazon2023/compare
+GET  /api/ai/amazon2023/query/:queryId/items/:productId/evidence
+POST /api/ai/amazon2023/refine
 ```
 
-Primary endpoints:
+Study logs:
 
 ```text
-GET  /api/demos/netflix/home
-GET  /api/demos/netflix/shelves
-GET  /api/demos/netflix/items?query=&tag=&limit=&offset=
-GET  /api/demos/netflix/items/:itemId
-GET  /api/demos/amazon/home
-GET  /api/demos/amazon/categories
-GET  /api/demos/amazon/products?query=&category=&subCategory=&priceMax=&attribute.warmthLevelMin=&attribute.waterproof=&limit=&cursor=
-GET  /api/demos/amazon/products/facets?query=&category=&attribute.material=
-GET  /api/demos/amazon/products/:productId
 POST /api/logs
 ```
 
-Amazon facets now include `reviewIntelligence` summaries for negative issue types, affected attributes, and reviewer profile distributions. Product detail reviews include a `profile` object plus optional review metadata (`helpfulVotes`, `verifiedPurchase`, `reviewSource`, `reviewImagesCount`), and `reviewEvidence` includes `issueType`, `severity`, and a typed `evidenceValue`.
+## Important Files And Functions
 
-Never share these with frontend code:
+- `src/app.ts`: CORS, JSON middleware, health route, route mounting, error handling.
+- `src/server.ts`: local server entry.
+- `src/db/client.ts`: Postgres client from `DATABASE_URL`.
+- `src/db/schema.ts`: Drizzle table definitions and indexes.
+- `src/routes/amazon2023.ts`
+  - `parseFilters`: converts query params into repository filters.
+  - catalog routes for manifest, categories, products, facets, batch, detail.
+- `src/repositories/amazon2023.ts`
+  - `buildProductFilters`: SQL filter construction for product, category, price, rating, and semantic filters.
+  - `searchAmazon2023Products`: paginated product search.
+  - `getAmazon2023Facets`: sidebar/facet counts.
+  - `getAmazon2023ProductDetail`: product detail with reviews and evidence.
+  - `serializeProductSummary`: UI-facing card payload.
+- `src/routes/amazon2023-ai.ts`
+  - `callGeminiInterpretation`: direct Gemini REST call for query decomposition.
+  - `buildFilters`: rule-level explicit filter extraction used before/after LLM validation.
+  - `buildClarifications`: ambiguity options with `criteriaOverrides`.
+  - `reviewEvidence`: review/comment evidence extraction.
+  - `comparisonValue` and `comparisonEvidenceAvailable`: matrix cell values and snippet availability.
+  - routes for `/interpret`, `/query`, `/compare`, `/evidence`, `/refine`.
+- `src/routes/logs.ts`: study event ingestion.
 
-- `DATABASE_URL`
-- DB password
-- Supabase service-role key
-- Supabase project password
+Scripts:
 
-Frontend verification:
+- `scripts/import-amazon-2023.ts`: selected Amazon 2023 product/review import.
+- `scripts/enrich-amazon-2023-semantics.ts`: semantic product-level enrichment with score/confidence/evidence counts.
+- `scripts/apply-amazon-2023-semantic-schema.ts`: semantic table/index migration helper.
+- `scripts/verify-amazon-2023-db.ts`: DB size, table counts, coverage, and quality checks.
+- `scripts/test-amazon2023-ai-flows.ts`: natural-language AI QA.
+- `scripts/test-amazon2023-clarification-counts.ts`: clarification count validation.
 
-1. Start this backend on port `8002`.
-2. Start `frontend/Netflix`.
-3. Open browser DevTools Network tab.
-4. Confirm the frontend requests `http://127.0.0.1:8002/api/demos/netflix/home`.
+## Verification
 
-## Node App Layout
-
-- `src/app.ts`: Express app, CORS, JSON middleware, route mounting, and error handling.
-- `src/server.ts`: local/dev server entry point.
-- `src/db/schema.ts`: Drizzle table definitions with composite primary keys for join tables.
-- `src/db/client.ts`: Supabase Postgres connection through `pg`.
-- `src/routes/`: HTTP routes documented in `api-docs/netflix-demo-api.md`.
-- `src/repositories/`: query and serialization logic.
-- `src/scripts/migrate.ts`: applies all SQL files in `drizzle/` in filename order.
-- `src/scripts/seed-netflix.ts`: imports `frontend/Netflix/data.json` into normalized tables.
-- `src/scripts/seed-amazon.ts`: imports active Amazon batch files from `fixtures/amazon-human/seed/`; historical direct-authored and `src_op` batches live under `fixtures/amazon-human/archive/` and are not loaded.
-- `scripts/build_amazon_v3_batches.py`: builds the deterministic v3 synthetic Amazon fixture with uneven product popularity, market patterns, positive-only products, targeted fit/use complaints, category-specific issue clusters, review metadata, and broader fit/body profile coverage.
-- `scripts/validate_amazon_human_batches.py`: validates Amazon batch references, v3 counts, review/evidence distribution, profile coverage, positive-only/high-rating complaint cases, issue clustering/diversity, repeated text limits, context mismatches, and evidence text grounding.
-- `scripts/verify-amazon-v3-db.ts`: checks the live Supabase Amazon import.
-- `scripts/build_src_op_amazon_batches.py`: normalizes reviewed `frontend/Amazon/src_op` products into archived backend reference batches.
-- `fixtures/amazon-human/`: backend source of truth for the Amazon AI-ready seed dataset, archive notes, and progress log.
-- `drizzle/0000_initial.sql`: reproducible SQL schema migration.
-- `drizzle/0001_amazon_catalog.sql`: Amazon product catalog and review schema migration.
-- `drizzle/0002_amazon_range_indexes.sql`: Amazon range filter indexes.
-- `drizzle/0003_amazon_ai_attributes.sql`: Amazon AI attribute taxonomy/value/evidence schema.
-- `drizzle/0004_amazon_review_intelligence.sql`: Amazon review profile and issue evidence schema.
-- `drizzle/0005_amazon_review_metadata.sql`: Amazon review metadata columns and expanded issue vocabulary.
-
-## `supabase/`
-
-Put Supabase setup notes and optional project files here:
-
-- migrations
-- seed data
-- edge functions, if used
-- local Supabase config
-- schema notes
-
-Optional future structure:
-
-```text
-backend/supabase/
-|-- migrations/
-|-- seed/
-`-- functions/
+```powershell
+pnpm run check
+pnpm run build
+pnpm run db:verify:amazon2023
+pnpm run ai:qa:amazon2023
+pnpm run clarification:qa:amazon2023
 ```
 
-## `api-docs/`
+## API Documentation
 
-Put backend API documents here:
-
-- endpoint list
-- request/response examples
-- error codes
-- auth requirements
-- frontend/backend data contracts
-
-Current API document:
-
-- `api-docs/amazon-demo-api.md`: Amazon page-data API, normalized catalog/review schema, Mermaid ER diagram, recommended indexes, response models, and error model.
-- `api-docs/netflix-demo-api.md`: Netflix page-data API, 4NF schema, Mermaid ER diagram, recommended indexes, response models, and error model.
-
-## `deployment/`
-
-Put deployment instructions here:
-
-- Supabase project setup
-- environment variables
-- deploy commands
-- deployment checklist
-- rollback notes
-
-## Core Data Entities
-
-Initial schema covers:
-
-- demo sites
-- shopping product categories
-- shopping products
-- product assets
-- product features
-- product options
-- product rating breakdowns
-- product reviews
-- product review profiles
-- product review evidence and issue summaries
-- media items
-- media tags
-- media assets
-- media episodes
-- media shelves
-- media hero placements
-- interaction logs
-
-AI task tables should be added after the AI request/display contracts are finalized.
-
-## Integration Rule
-
-Backend should expose data in a shape that is easy for:
-
-- frontend UI rendering
-- future AI integration
-
-If the API changes, update `docs/IMPLEMENTATION.md` and `backend/api-docs/`.
+- `api-docs/amazon2023-api.md`: current Amazon Reviews 2023 data/API contract.
+- `api-docs/amazon-ai-api.md`: AI Criteria Lens endpoints and payloads.
+- `api-docs/amazon-demo-api.md`: older Amazon demo reference retained for comparison.
+- `deployment/amazon2023-cutover-runbook.md`: backup, import, fallback images, and validation runbook.
