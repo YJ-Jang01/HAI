@@ -1,37 +1,36 @@
 # Frontend
 
-Frontend now owns the AImazon shopping demo only.
+Frontend currently owns one active app: `frontend/Amazon/`.
 
-## Responsibilities
+## Scope
 
-- Implement and maintain the `Amazon` shopping demo.
-- Build UI states for baseline search, AI Criteria Lens, product comparison, and study logging.
-- Integrate backend Amazon 2023 API responses and AI display-agent outputs into the screen.
+- Render the AImazon shopping experience.
+- Support regular search and AI Criteria Lens search from the same header search bar.
+- Keep the left filter sidebar available on listing/search pages.
+- Let users select 2-4 products and compare them in a bottom-docked matrix.
+- Open dataset-backed review/source snippets from the matrix.
+- Support product detail, Add to Cart, cart review, and checkout-button study flow.
+- Send study events to the backend logging API.
 
-## Directory Layout
+## Layout
 
 ```text
 frontend/
+|-- README.md
 `-- Amazon/
+    |-- README.md
+    |-- package.json
+    |-- src/
+    |   |-- App.jsx
+    |   |-- data.js
+    |   `-- styles.css
+    `-- scripts/
+        `-- e2e-amazon2023-cdp.mjs
 ```
 
-## `Amazon/`
+## Run
 
-Main development target for product comparison and evidence overlays.
-
-Expected work:
-
-- natural-language product search
-- AI criteria chips and clarification options
-- left filter sidebar for all search/listing result pages
-- multi-item selection
-- comparison matrix
-- source snippet expansion
-- study logging hooks
-
-## Run Locally
-
-Amazon is a React/Vite app:
+Start the backend first, then run:
 
 ```powershell
 cd frontend/Amazon
@@ -40,3 +39,19 @@ pnpm run dev
 ```
 
 Open `http://127.0.0.1:8000`.
+
+Build and browser validation:
+
+```powershell
+pnpm run build
+pnpm run e2e:amazon2023
+```
+
+## Main Implementation Files
+
+- `Amazon/src/App.jsx`: UI components and state transitions for search, filters, AI Criteria Lens, comparison, product detail, cart, language mode, and toasts.
+- `Amazon/src/data.js`: backend API client and payload normalization.
+- `Amazon/scripts/e2e-amazon2023-cdp.mjs`: headless Chrome/CDP user-flow validation.
+- `../docs/screenshots/`: README screenshot artifacts captured from the local app.
+
+See `frontend/Amazon/README.md` for component/function details and the screenshot gallery.

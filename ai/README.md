@@ -1,71 +1,10 @@
-# AI
+# AI Modules
 
-AI development is split between two people and two modules.
+This directory keeps experimental AI services and shared contracts for AImazon. The current production-like AI Criteria Lens path is implemented in the Node backend at `backend/src/routes/amazon2023-ai.ts`, which calls Gemini directly when a key is configured.
 
-## Roles
+The Python services here remain useful for experiments, contract prototyping, or future service extraction, but the current frontend does not need them running.
 
-### AI Developer 1: Natural-Language Request Agent
-
-Owns `ai/nl-request-agent/`.
-
-Goal:
-
-- Recognize user natural-language commands.
-- Convert the command into a structured backend/agent task request.
-- Decide what data or action the backend should provide.
-
-Example:
-
-User says:
-
-> Compare 2, 5, and the cheapest wireless one for battery complaints.
-
-The module should produce a structured request such as:
-
-```json
-{
-  "intent": "compare_items",
-  "selectedItems": [
-    { "type": "visible_number", "value": 2 },
-    { "type": "visible_number", "value": 5 },
-    { "type": "attribute_query", "value": "cheapest wireless" }
-  ],
-  "criteria": ["battery", "negative_reviews"],
-  "targetDemo": "Amazon"
-}
-```
-
-### AI Developer 2: Display Agent
-
-Owns `ai/display-agent/`.
-
-Goal:
-
-- Take returned backend/AI data.
-- Transform it into UI-ready evidence overlays, comparison tray entries, and display states.
-- Decide how to present evidence efficiently for the project goal.
-
-Example output:
-
-```json
-{
-  "displayMode": "in_place_overlay",
-  "overlays": [
-    {
-      "itemId": "product-1",
-      "summary": "Strong battery reviews, but ANC-heavy use has some complaints.",
-      "evidenceCount": 4,
-      "snippets": ["..."]
-    }
-  ],
-  "tray": {
-    "items": ["product-1", "product-5"],
-    "criteria": ["battery", "negative_reviews"]
-  }
-}
-```
-
-## Directory Layout
+## Layout
 
 ```text
 ai/
@@ -74,12 +13,39 @@ ai/
 `-- shared/
 ```
 
-## Shared Contracts
+## Current Runtime Path
 
-Use `ai/shared/` for schemas or examples shared by both AI modules.
+```text
+frontend/Amazon
+  -> backend POST /api/ai/amazon2023/query
+  -> backend/src/routes/amazon2023-ai.ts
+  -> Gemini REST API when GEMINI_API_KEY is available
+  -> Supabase-backed catalog/search/evidence validation
+  -> frontend criteria, clarification, grid, matrix, snippets
+```
 
-Do not duplicate request/response shapes independently. If the contract changes, update:
+## Module Roles
 
-- `ai/shared/`
-- `backend/api-docs/`
-- `docs/IMPLEMENTATION.md`
+- `nl-request-agent/`: experimental natural-language parser service. It can be used to prototype intent extraction, selected item references, criteria, and repair commands.
+- `display-agent/`: experimental display payload service. It can be used to prototype overlays, matrix rows, evidence snippets, warnings, and display states.
+- `shared/`: shared schemas and helpers for the Python AI modules.
+
+## Shared Contract Rule
+
+If a shape is used by multiple AI modules, put it in `ai/shared/` and keep backend API docs aligned:
+
+- `backend/api-docs/amazon-ai-api.md`
+- `backend/api-docs/amazon2023-api.md`
+- `docs/SERVICE_DATA_FLOW.md`
+
+## Gemini Keys
+
+For the current backend runtime, configure Gemini in `backend/.env`:
+
+```text
+GEMINI_API_KEY=<key>
+GEMINI_MODEL=gemini-2.5-flash-lite
+AI_AMAZON2023_LLM=on
+```
+
+Do not commit API keys.

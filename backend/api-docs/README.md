@@ -1,46 +1,60 @@
 # API Docs
 
-This directory stores backend API documentation.
+This directory documents backend data contracts used by the AImazon frontend, AI Criteria Lens, importer, and study logging.
 
-## What Belongs Here
+## Current Docs
 
-- Endpoint specifications.
-- Database schema used by the endpoints.
-- Mermaid schema diagrams when useful.
-- Recommended indexes for endpoint lookup/filter/order paths.
-- Request and response schemas.
-- Example payloads.
-- Error codes.
-- Auth notes.
-- Frontend/backend data contracts.
+- `amazon2023-api.md`: current Amazon Reviews 2023 catalog, import, image fallback, semantic attributes, verification, and endpoint contract.
+- `amazon-ai-api.md`: AI Criteria Lens query, clarification, comparison, evidence, and refine contracts.
+- `amazon-demo-api.md`: older Amazon demo reference retained for comparison while the current runtime uses Amazon 2023 tables and routes.
 
-## Current API Scope
+## Runtime Routes
 
-Current API docs should focus on:
+Catalog routes are mounted at both `/api/demos/amazon` and `/api/demos/amazon2023`:
 
-- page rendering data
-- detail view data
-- search/filter data
-- study interaction logging
-- AI Criteria Lens orchestration contracts
-- DB schema and indexes needed by those APIs
+```text
+GET /categories
+GET /products
+GET /products/facets
+GET /products/batch
+GET /products/:productId
+```
 
-AI-agent-specific APIs are documented separately from page-data APIs so the regular catalog endpoints remain stable.
+AI routes are mounted at both `/api/ai/amazon` and `/api/ai/amazon2023`:
 
-## API Docs
+```text
+POST /interpret
+POST /query
+POST /compare
+GET  /query/:queryId/items/:productId/evidence
+POST /refine
+```
 
-- `amazon-demo-api.md`: Amazon shopping demo schema and endpoint specification.
-- `amazon-ai-api.md`: Amazon AI Criteria Lens query, evidence, compare, and refine endpoint specification.
-- `amazon2023-api.md`: Amazon Reviews 2023 replacement-track catalog, AI, import, image fallback, and verification contract.
+Study logging:
 
-## Current Implementation
+```text
+POST /api/logs
+```
 
-- Node.js/Express routes live in `backend/src/routes/`.
-- Drizzle schema lives in `backend/src/db/schema.ts`.
-- `pnpm run db:migrate` applies all SQL files in `backend/drizzle/` to Supabase Postgres.
-- `pnpm run db:seed:amazon` imports the current Amazon AI-ready batch fixture from `backend/fixtures/amazon-human/seed/`, including review metadata, review profiles, attribute taxonomy, and issue-tagged evidence. If v4 expansion batches exist, the importer loads the v3 baseline plus all `batch-v4-*` files. Historical direct-authored and normalized `src_op` batches are retained under `backend/fixtures/amazon-human/archive/`.
-- `pnpm run db:verify:amazon` checks the live Supabase Amazon import after seeding.
+## Implementation Anchors
 
-## Rule
+- `backend/src/routes/amazon2023.ts`: catalog endpoint handlers and query-param parsing.
+- `backend/src/routes/amazon2023-ai.ts`: AI Criteria Lens endpoint handlers.
+- `backend/src/repositories/amazon2023.ts`: DB query and serialization logic.
+- `backend/src/db/schema.ts`: Drizzle schema.
+- `backend/scripts/import-amazon-2023.ts`: Amazon 2023 importer.
+- `backend/scripts/enrich-amazon-2023-semantics.ts`: semantic enrichment.
+- `backend/scripts/verify-amazon-2023-db.ts`: live DB verifier.
 
-Every endpoint used by frontend or AI code should have one documented example request and one documented example response.
+## Documentation Rule
+
+Every endpoint used by frontend or AI code should document:
+
+- URL and method
+- request params/body
+- response shape
+- error shape
+- frontend state that consumes it
+- DB tables involved
+
+When route behavior changes, update the matching API doc and the relevant README in the same change.

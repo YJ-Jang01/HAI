@@ -1,52 +1,51 @@
 # Natural-Language Request Agent
 
-Owner: AI Developer 1.
+Experimental Python service for natural-language intent extraction. The active AImazon runtime currently uses the Node backend route `backend/src/routes/amazon2023-ai.ts` and calls Gemini directly, so this service is optional unless the team decides to extract NL parsing into a separate process again.
 
-## Responsibility
+## Intended Responsibility
 
-Convert natural-language user input into a structured task request for backend/AI processing.
+- Convert user text into structured search or comparison intent.
+- Identify selected item references.
+- Extract criteria, filters, and repair/refine commands.
+- Return only backend-executable fields that can be validated against catalog taxonomy and semantic attributes.
 
-## Inputs
+## Example Output Shape
 
-- Raw user command.
-- Current demo name: `Amazon` or `Netflix`.
-- Visible UI registry from frontend.
-- Current selected items, if any.
-- Current study condition, if any.
+```json
+{
+  "intent": "compare_items",
+  "targetDemo": "Amazon",
+  "selectedItems": [
+    { "type": "visible_number", "value": 2 },
+    { "type": "visible_number", "value": 5 }
+  ],
+  "criteria": ["comfort", "fit", "review_risks"],
+  "filters": {
+    "priceMax": 120,
+    "genderTarget": ["women"]
+  }
+}
+```
 
-## Outputs
-
-Structured request object:
-
-- intent
-- selected item references
-- criteria
-- filters
-- repair operation, if any
-- required backend data
-
-## Initial Intents
-
-- `select_items`
-- `compare_items`
-- `filter_evidence`
-- `repair_selection`
-- `clear_selection`
-- `request_details`
-
-## Development Notes
-
-For the current Amazon AI Criteria Lens flow, this agent is an always-on runtime dependency. The backend calls this service first, then validates the returned intent against backend-owned catalog taxonomy, attribute definitions, and range facets before querying Supabase.
-
-If Gemini is temporarily unavailable, this service returns a temporary Codex-authored fallback intent instead of failing the whole flow. That fallback only emits coarse category/product-type hints, explicit price ranges, and DB-backed attribute hints. The backend still performs the final taxonomy and attribute validation, so arbitrary filters are not executed.
-
-## Local Runtime
-
-The backend expects this service at `http://127.0.0.1:8011` by default.
+## Local Run
 
 ```powershell
+cd ai/nl-request-agent
 uv run uvicorn main:app --host 127.0.0.1 --port 8011
 ```
 
-`GEMINI_API_KEY` must be available in the process environment, a local `.env` file, or `backend/.env`.
-For local compatibility, `GEMINI_KEY` and `gemini_key` are also accepted.
+If used, provide a Gemini key through environment or a local `.env`:
+
+```text
+GEMINI_API_KEY=<key>
+```
+
+## Files
+
+- `main.py`: FastAPI entrypoint.
+- `agent.py`: parser logic and Gemini interaction.
+- `pyproject.toml`: Python dependencies.
+
+## Rule
+
+Do not let this service execute arbitrary filters. Backend must still validate any returned intent against Amazon 2023 product fields, facets, semantic attributes, and review evidence.

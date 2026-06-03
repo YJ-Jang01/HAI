@@ -1,87 +1,84 @@
 # Deployment
 
-This directory is for backend deployment notes and checklists.
-
-## What Belongs Here
-
-- Supabase project setup steps.
-- Required environment variables.
-- Deployment commands.
-- Deployment checklist.
-- Rollback notes.
-- Links to deployed project dashboards, if safe to share.
+Deployment notes for the AImazon backend, Supabase database, and Amazon Reviews 2023 dataset operations.
 
 ## Runbooks
 
-- `amazon2023-cutover-runbook.md`: live-data backup gate, Amazon Reviews 2023 seed planning/import, image fallback candidates, and frontend/API validation.
+- `amazon2023-cutover-runbook.md`: backup approval, Amazon 2023 seed planning/import, semantic enrichment, image fallback, frontend/API validation, and rollback notes.
 
-## Initial Deployment Checklist
+## Local Production-Like Run
 
-- [ ] Supabase project created.
-- [ ] Database schema applied.
-- [ ] Seed data loaded.
-- [ ] API access pattern documented.
-- [ ] Logging storage verified.
-- [ ] Frontend environment/config updated.
-- [ ] Demo flow tested from deployed backend.
+```powershell
+cd backend
+pnpm install
+pnpm run check
+pnpm run build
+pnpm run db:migrate
+pnpm run db:verify:amazon2023
+pnpm start
+```
 
-## Rule
+Open:
 
-Do not commit secrets, service-role keys, or private participant data.
-
-## Free Deployment Direction
-
-Use Supabase free tier for Postgres and deploy the Node.js API to a free Node-capable hosting option.
-
-Recommended no-budget path for now:
-
-1. Supabase free project for the database.
-2. Local Node.js development against Supabase or a local Postgres database.
-3. Deploy the Node.js API later to a free service that supports Node web processes.
-4. Keep static demo pages separate unless the frontend team converts them into a deployable frontend app.
+```text
+http://127.0.0.1:8002/health
+http://127.0.0.1:8002/api/demos/amazon/products?limit=5
+```
 
 ## Environment Variables
 
-Set these on the deployed Node.js host:
+Set these on the Node host:
 
 ```text
 PORT=8002
 CORS_ALLOWED_ORIGINS=<frontend-origin-1>,<frontend-origin-2>
 DATABASE_URL=<supabase-postgres-uri-with-sslmode-require>
 DATABASE_SSL=true
+GEMINI_API_KEY=<optional>
+GEMINI_MODEL=gemini-2.5-flash-lite
+AI_AMAZON2023_LLM=on
+AI_AMAZON2023_LLM_TIMEOUT_MS=4500
 ```
 
-Never expose `DATABASE_URL` or Supabase service-role credentials to browser code.
+Never expose `DATABASE_URL`, Supabase service-role keys, Gemini keys, participant data, or private logs to browser code.
 
-## Supabase First-Time Setup
+## Supabase Free Plan Guardrails
 
-Run from `backend/` after `backend/.env` points to Supabase:
+- Database limit: 500 MB.
+- Storage limit: 1 GB.
+- Keep product images as URLs in Postgres.
+- Upload fallback thumbnails to Storage only when remote image URLs fail.
+- Keep semantic attributes compact and product-level.
+- Run `pnpm run db:verify:amazon2023` after import/enrichment.
+- Stop or reduce import size if projected DB size crosses 485-490 MB.
+
+## Dataset Refresh Checklist
+
+Run from `backend/` only when replacing or expanding the dataset:
 
 ```powershell
-pnpm install
-pnpm run check
+pnpm run db:backup:supabase -- -IUnderstandFullRowBackup
 pnpm run db:migrate
-pnpm run db:seed:amazon
+pnpm run dataset:profile:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz>
+pnpm run dataset:plan:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz> --out reports/amazon2023-seed-plan.json --db-budget-mb 500
+pnpm run dataset:import:amazon2023 -- --metadata <meta_Amazon_Fashion.jsonl.gz> --reviews <reviews_Amazon_Fashion.jsonl.gz> --selection-plan reports/amazon2023-seed-plan.json
+pnpm run dataset:semantic:schema:amazon2023
+pnpm run dataset:semantic:amazon2023 -- --dataset-slug amazon-fashion-2023 --mode apply --max-db-mb 490
+pnpm run db:verify:amazon2023 -- --dataset-slug amazon-fashion-2023 --max-db-mb 490
 ```
 
-Then verify:
+Do not refresh seed data during a study unless logs and current catalog state are backed up.
 
-```powershell
-pnpm run dev
-```
+## Validation Checklist
 
-Open `http://127.0.0.1:8002/api/demos/amazon/products?limit=5`.
+- `pnpm run check`
+- `pnpm run build`
+- `pnpm run db:verify:amazon2023`
+- `pnpm run ai:qa:amazon2023`
+- `pnpm run clarification:qa:amazon2023`
+- `cd ../frontend/Amazon; pnpm run build`
+- Browser smoke test of search, filters, comparison snippets, Add to Cart, cart, and checkout button.
 
-## Deployment Commands
+## Checkout Handoff
 
-Most hosts need equivalent commands:
-
-```bash
-pnpm install
-pnpm run build
-pnpm run db:migrate
-pnpm run db:seed:amazon
-pnpm start
-```
-
-Run seed commands only when seed data should be refreshed. `db:seed:amazon` clears and reloads the Amazon catalog for the `amazon` demo site, so during an actual study, avoid reseeding unless logs and catalog state have already been backed up and the team agrees to reset demo data.
+The frontend currently exposes a checkout button on the cart page for the user-study flow. The planned Google Docs handoff should attach to that button later. Until then, clicking checkout is a visible interaction step, not a completed payment integration.
