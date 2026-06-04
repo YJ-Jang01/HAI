@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: npx --yes pnpm@10.7.1 install --frozen-lockfile && npx --yes pnpm@10.7.1 run build
     startCommand: node dist/server.js
     healthCheckPath: /health
     autoDeploy: true
