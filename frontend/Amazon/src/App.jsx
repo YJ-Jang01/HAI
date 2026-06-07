@@ -133,10 +133,9 @@ const UI_COPY = {
     criteriaRowDisabled: (label) => `${label} is hidden from the comparison matrix`,
     showMoreCriteriaRows: (count) => `Show ${count} more matrix rows`,
     hideCriteriaRows: "Collapse matrix rows",
-    preferenceStressTest: "Preference Stress-Test",
-    stressHelp: "Adjust preference weights to see how selected or top-ranked items move.",
-    stressUpdating: "Recomputing preference ranking...",
-    stressInsight: "Preference ranking",
+    preferenceStressTest: "Preference Criteria",
+    stressHelp: "Adjust the weights; the recommended card updates in the grid.",
+    stressUpdating: "Updating the recommended match...",
     stressLow: "Low",
     stressHigh: "High",
     stressPrice: "Price sensitivity",
@@ -154,7 +153,6 @@ const UI_COPY = {
     initialResults: "Initial results",
     previousCriteria: "Previous criteria",
     reapplyCriteria: "Reapply",
-    currentCriteria: "Current",
     criteriaHistory: "Criteria history",
     draftCriteria: "Draft criteria from your query",
     aiInterpreting: "AI Criteria Lens is interpreting your request...",
@@ -165,11 +163,13 @@ const UI_COPY = {
     nextActionsHelp: "Select 2-4 products to compare, or refine the current lens.",
     compareSelected: "Compare selected",
     sourceSnippets: "Source snippets",
-    supportingEvidence: "Recommendation evidence",
-    skepticalEvidence: "Caution evidence",
-    missingEvidence: "Evidence gaps",
-    missingSupportingEvidence: "No positive review evidence was found for this criterion.",
-    missingSkepticalEvidence: "No cautionary review evidence was found for this criterion.",
+    scrollToSnippets: "Go to evidence snippets",
+    supportingEvidence: "Confirmed strengths",
+    supportingEvidenceHelp: "Review text that positively evaluates this item on the selected criterion.",
+    skepticalEvidence: "Confirmed concerns",
+    skepticalEvidenceHelp: "Review text that describes a weakness or caution for the selected criterion.",
+    missingEvidence: "No review evidence",
+    missingEvidenceHelp: "No review text was found for judging this criterion. It is hard to conclude whether it is good or bad.",
     closeSnippets: "Close snippets",
     loadingEvidence: "Loading evidence...",
     noEvidenceInfo: "No review evidence available.",
@@ -245,6 +245,7 @@ const UI_COPY = {
     aiRequestFailed: "AI request failed.",
     evidenceRequestFailed: "Evidence request failed.",
     refineRequestFailed: "Refine request failed.",
+    recommendedBadge: "Recommended",
   },
   ko: {
     all: "전체",
@@ -350,10 +351,9 @@ const UI_COPY = {
     criteriaRowDisabled: (label) => `${label} 기준이 비교표에서 숨겨집니다`,
     showMoreCriteriaRows: (count) => `추가 비교 기준 ${count}개 보기`,
     hideCriteriaRows: "비교 기준 접기",
-    preferenceStressTest: "선호 스트레스 테스트",
-    stressHelp: "선호 가중치를 조절하면 선택 상품 또는 상위 상품의 순위 변화가 계산됩니다.",
-    stressUpdating: "선호 순위를 다시 계산하는 중...",
-    stressInsight: "선호 순위",
+    preferenceStressTest: "선호 기준",
+    stressHelp: "선호 기준을 조절하면 그리드의 추천 마크가 바뀝니다.",
+    stressUpdating: "추천 상품을 다시 계산하는 중...",
     stressLow: "낮음",
     stressHigh: "높음",
     stressPrice: "가격 민감도",
@@ -371,7 +371,6 @@ const UI_COPY = {
     initialResults: "초기 결과",
     previousCriteria: "이전 조건",
     reapplyCriteria: "다시 적용",
-    currentCriteria: "현재 조건",
     criteriaHistory: "조건 히스토리",
     draftCriteria: "입력 기반 임시 기준",
     aiInterpreting: "AI 기준 렌즈가 요청을 해석하고 있습니다...",
@@ -382,11 +381,13 @@ const UI_COPY = {
     nextActionsHelp: "비교할 상품 2~4개를 선택하거나 현재 기준을 조정하세요.",
     compareSelected: "선택 상품 비교",
     sourceSnippets: "근거 스니펫",
-    supportingEvidence: "추천 근거",
-    skepticalEvidence: "주의 근거",
-    missingEvidence: "근거 부족",
-    missingSupportingEvidence: "이 기준에 대한 긍정 리뷰 근거가 없습니다.",
-    missingSkepticalEvidence: "이 기준에 대한 주의 리뷰 근거가 없습니다.",
+    scrollToSnippets: "근거 스니펫으로 이동",
+    supportingEvidence: "확인된 장점",
+    supportingEvidenceHelp: "리뷰에서 이 기준을 좋게 평가한 내용입니다.",
+    skepticalEvidence: "확인된 우려",
+    skepticalEvidenceHelp: "리뷰에서 이 기준을 아쉽게 평가하거나 주의가 필요하다고 말한 내용입니다.",
+    missingEvidence: "리뷰 근거 없음",
+    missingEvidenceHelp: "이 기준을 판단할 만한 리뷰 문장을 찾지 못했습니다. 좋다/나쁘다로 결론내리기 어렵습니다.",
     closeSnippets: "스니펫 닫기",
     loadingEvidence: "근거를 불러오는 중...",
     noEvidenceInfo: "정보 없음",
@@ -462,6 +463,7 @@ const UI_COPY = {
     aiRequestFailed: "AI 요청에 실패했습니다.",
     evidenceRequestFailed: "근거 정보를 불러올 수 없습니다.",
     refineRequestFailed: "AI 기준 조정에 실패했습니다.",
+    recommendedBadge: "추천",
   },
 };
 
@@ -1024,6 +1026,30 @@ function localizeCriterionValue(value, language, copy) {
   return CRITERION_VALUE_LABELS_KO[text] ?? localizeCatalogLabel(text, language);
 }
 
+function formatAiPriceCriterionValue(criterion, language, copy) {
+  const rawValue = criterion?.displayValue ?? criterion?.value;
+  const amount = parsePrice(rawValue);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return localizeCriterionValue(rawValue, language, copy);
+  }
+  const formatted = formatUsd(amount);
+  if (criterion?.key === "priceMin" || criterion?.key === "minPrice") {
+    return language === "ko" ? `${formatted} 이상` : `${formatted}+`;
+  }
+  if (criterion?.key === "priceMax" || criterion?.key === "maxPrice") {
+    return copy.upTo(formatted);
+  }
+  return formatted;
+}
+
+function formatAiCriterionValue(criterion, language, copy) {
+  const key = criterion?.key;
+  if (key === "price" || key === "priceMin" || key === "priceMax" || key === "minPrice" || key === "maxPrice") {
+    return formatAiPriceCriterionValue(criterion, language, copy);
+  }
+  return localizeCriterionValue(criterion?.displayValue ?? criterion?.value, language, copy);
+}
+
 const AI_CRITERIA_GROUPS = [
   {
     key: "productTaxonomy",
@@ -1089,7 +1115,7 @@ function formatGroupedCriterionValue(group, language, copy) {
   for (const key of group.keys) {
     const matchingCriteria = group.criteria.filter((criterion) => criterion.key === key);
     for (const criterion of matchingCriteria) {
-      const localized = localizeCriterionValue(criterion.displayValue ?? criterion.value, language, copy);
+      const localized = formatAiCriterionValue(criterion, language, copy);
       const normalized = String(localized ?? "").trim().toLowerCase();
       if (!normalized || seen.has(normalized)) continue;
       seen.add(normalized);
@@ -1153,8 +1179,12 @@ function localizeIssue(value, language) {
 
 function localizeMatrixValue(key, value, language, copy) {
   if (value == null || value === "") return language === "ko" ? "없음" : "N/A";
+  const textValue = String(value ?? "").trim();
+  if (/^No\s+.+\s+metadata$/i.test(textValue)) {
+    return language === "ko" ? "정보 없음" : "No info";
+  }
   if (language === "ko" && key === "brand") {
-    const text = String(value ?? "").trim();
+    const text = textValue;
     if (!text || text === "N/A") return "없음";
     return "등록 브랜드";
   }
@@ -1564,6 +1594,14 @@ function ImageBox({ src, alt, className = "", imgClassName = "object-contain" })
     setLoaded(false);
   }, [src]);
 
+  useEffect(() => {
+    if (!src || loaded || failed) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      setFailed(true);
+    }, 8000);
+    return () => window.clearTimeout(timeoutId);
+  }, [failed, loaded, src]);
+
   return (
     <div className={`relative flex items-center justify-center overflow-hidden bg-[#f7f7f7] ${className}`}>
       {(!src || failed || !loaded) ? (
@@ -1575,7 +1613,11 @@ function ImageBox({ src, alt, className = "", imgClassName = "object-contain" })
               </div>
               <div className="line-clamp-2 max-w-full text-[#374151]">{fallbackLabel}</div>
             </div>
-          ) : ""}
+          ) : (
+            <div className="h-12 w-12 rounded-full border border-[#d5d9d9] bg-white/80 shadow-sm">
+              <div className="h-full w-full animate-pulse rounded-full bg-[#d5d9d9]" />
+            </div>
+          )}
         </div>
       ) : null}
       {src && !failed ? (
@@ -1588,6 +1630,28 @@ function ImageBox({ src, alt, className = "", imgClassName = "object-contain" })
         />
       ) : null}
     </div>
+  );
+}
+
+function AiToggleGlyph({ active, busy }) {
+  return (
+    <svg className="h-6 w-6" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="ai-toggle-gradient" x1="3" y1="3" x2="21" y2="21">
+          <stop stopColor={active ? "#f5d0fe" : "#e5e7eb"} />
+          <stop offset="1" stopColor={active ? "#8b5cf6" : "#9ca3af"} />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 3.75 13.9 9.1l5.35 1.9-5.35 1.9L12 18.25l-1.9-5.35L4.75 11l5.35-1.9L12 3.75Z"
+        fill="url(#ai-toggle-gradient)"
+        stroke={active ? "#5b21b6" : "#6b7280"}
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <circle cx="18.25" cy="5.75" r="2.15" fill={busy ? "#f59e0b" : active ? "#7c3aed" : "#9ca3af"} />
+      <circle cx="5.8" cy="17.75" r="1.55" fill={active ? "#c084fc" : "#cbd5e1"} />
+    </svg>
   );
 }
 
@@ -1611,6 +1675,7 @@ function Header({
   onCart,
 }) {
   const aiTitle = aiEnabled ? copy.disableAi : copy.enableAi;
+  const aiBusy = ["planning", "loading"].includes(aiStatus);
   const womenCategory = categories.find((category) => normalizeHomeText(categoryLabel(category)) === "women");
   const menCategory = categories.find((category) => normalizeHomeText(categoryLabel(category)) === "men");
   const navItems = [
@@ -1652,9 +1717,9 @@ function Header({
             aria-label={copy.searchPlaceholder}
           />
           <button
-            className={`relative flex w-[44px] cursor-pointer items-center justify-center border-0 border-l border-l-[#d5d9d9] transition max-[520px]:w-[40px] ${
+            className={`relative flex w-[48px] cursor-pointer items-center justify-center border-0 border-l border-l-[#d5d9d9] transition max-[520px]:w-[42px] ${
               aiEnabled
-                ? "bg-[#f5f3ff] text-[#5b21b6] ring-1 ring-inset ring-[#7c3aed]"
+                ? "bg-[radial-gradient(circle_at_50%_40%,#f5d0fe_0%,#ede9fe_42%,#7c3aed_100%)] text-white shadow-[inset_0_0_0_1px_#6d28d9]"
                 : "bg-[#f3f4f6] text-[#6b7280] hover:bg-[#e5e7eb]"
             }`}
             type="button"
@@ -1663,8 +1728,8 @@ function Header({
             aria-pressed={aiEnabled ? "true" : "false"}
             onClick={onToggleAi}
           >
-            <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${aiEnabled ? "border-[#7c3aed] bg-white" : "border-[#9ca3af] bg-white"}`} aria-hidden="true">
-              <span className={`h-2.5 w-2.5 rounded-full ${["planning", "loading"].includes(aiStatus) ? "bg-[#f59e0b]" : aiEnabled ? "bg-[#7c3aed]" : "bg-[#9ca3af]"}`} />
+            <span className={`flex h-8 w-8 items-center justify-center rounded-full ${aiEnabled ? "bg-white/90 shadow-sm" : "bg-white"}`} aria-hidden="true">
+              <AiToggleGlyph active={aiEnabled} busy={aiBusy} />
             </span>
           </button>
           <button className="flex w-[54px] cursor-pointer items-center justify-center border-0 bg-[#febd69] text-xl hover:bg-[#f3a847]" type="submit" aria-label={copy.search}>
@@ -2011,7 +2076,7 @@ function Home({ categories, products, language, copy, onCategorySelect, onOpenPr
   );
 }
 
-function ProductCard({ product, language, copy, onOpen, aiActive = false, selected = false, onToggleSelect }) {
+function ProductCard({ product, language, copy, onOpen, aiActive = false, selected = false, recommended = false, onToggleSelect }) {
   const matchTags = [...(product.semanticAttributes ?? []), ...(product.attributes ?? [])]
     .filter((attribute) => ["style", "season", "occasion", "material", "sleeveLength", "fit", "warmthLevel", "comfortLevel"].includes(attribute.key))
     .slice(0, 3);
@@ -2028,7 +2093,14 @@ function ProductCard({ product, language, copy, onOpen, aiActive = false, select
         </div>
       ) : null}
       <button className="block w-full cursor-pointer text-left" type="button" onClick={() => onOpen(product)} aria-label={displayName}>
-        <ImageBox className="aspect-square rounded" src={product.img} alt={displayName} />
+        <div className="relative">
+          <ImageBox className="aspect-square rounded" src={product.img} alt={displayName} />
+          {recommended ? (
+            <span className="absolute bottom-2 left-2 rounded-full border border-[#facc15] bg-[#fef9c3] px-2.5 py-1 text-[11px] font-extrabold text-[#713f12] shadow-sm">
+              {copy.recommendedBadge}
+            </span>
+          ) : null}
+        </div>
       </button>
       <div className="mt-2 grid gap-1">
         <button className="line-clamp-2 min-h-[38px] cursor-pointer text-left text-sm leading-[1.35] text-[#0f1111] group-hover:text-[#c7511f] group-hover:underline" type="button" onClick={() => onOpen(product)}>
@@ -2448,7 +2520,9 @@ function CriteriaLensStrip({
   const decompositionSource = decomposition?.source === "gemini" ? copy.llmSourceGemini : copy.llmSourceRule;
   const decompositionConfidence = Number.isFinite(decomposition?.confidence) ? Math.round(decomposition.confidence * 100) : null;
   const correctionCount = decomposition?.corrections?.length ?? 0;
-  const stressTop = stressResult?.items?.[0];
+  const decompositionHelp = language === "ko"
+    ? "검색어를 DB 필터로 변환한 출처와 확신도입니다."
+    : "Source and confidence for converting the query into DB-backed filters.";
   const warningText = localizeAiMessage(aiLens.interpretation?.warning, language, copy);
   const showWarning = warningText && !String(aiLens.interpretation?.warning ?? "").includes("AI query used the currently selected parsed criteria") && !String(aiLens.interpretation?.warning ?? "").includes("AI output was validated against backend-owned taxonomy");
   return (
@@ -2458,7 +2532,7 @@ function CriteriaLensStrip({
           <div className="font-bold">{copy.aiCriteriaLens}</div>
           <div className="text-xs text-[#4c1d95]">{copy.parsedCriteria}: {localizeInterpretationSummary(aiLens.interpretation?.summary, language)}</div>
           {decomposition ? (
-            <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold text-[#6d28d9]">
+            <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold text-[#6d28d9]" title={decompositionHelp}>
               <span>{copy.decompositionQuality}: {decompositionSource}{decompositionConfidence !== null ? ` ${decompositionConfidence}%` : ""}</span>
               {decomposition.fallbackUsed ? <span>{copy.fallbackInUse}</span> : null}
               {correctionCount ? <span>{copy.correctionsApplied(correctionCount)}</span> : null}
@@ -2472,7 +2546,7 @@ function CriteriaLensStrip({
         {groupedCriteria.map((item) => {
           const status = item.status;
           const label = item.type === "group" ? localizeAiCriteriaGroupLabel(item, language) : localizeDimensionLabel(item.criterion, language);
-          const value = item.type === "group" ? formatGroupedCriterionValue(item, language, copy) : localizeCriterionValue(item.criterion.displayValue, language, copy);
+          const value = item.type === "group" ? formatGroupedCriterionValue(item, language, copy) : formatAiCriterionValue(item.criterion, language, copy);
           return (
             <span
               key={item.key}
@@ -2519,30 +2593,33 @@ function CriteriaLensStrip({
       {history.length > 1 ? (
         <div className="mb-3 flex flex-wrap items-center gap-2 border-t border-[#ede9fe] pt-3 text-xs">
           <span className="font-bold text-[#4c1d95]">{copy.criteriaHistory}</span>
-          <button
-            className={`rounded-full border px-3 py-1 font-semibold ${historyIndex === 0 ? "border-[#7c3aed] bg-[#ede9fe] text-[#5b21b6]" : "border-[#ddd6fe] bg-white text-[#6d28d9] hover:border-[#7c3aed]"}`}
-            type="button"
-            disabled={historyIndex === 0}
-            onClick={() => onRestoreHistory(0)}
-          >
-            {copy.initialResults}
-          </button>
-          <button
-            className="rounded-full border border-[#ddd6fe] bg-white px-3 py-1 font-semibold text-[#6d28d9] hover:border-[#7c3aed] disabled:cursor-not-allowed disabled:opacity-45"
-            type="button"
-            disabled={historyIndex <= 0}
-            onClick={() => onRestoreHistory(Math.max(0, historyIndex - 1))}
-          >
-            {copy.previousCriteria}
-          </button>
-          <button
-            className="rounded-full border border-[#ddd6fe] bg-white px-3 py-1 font-semibold text-[#6d28d9] hover:border-[#7c3aed] disabled:cursor-not-allowed disabled:opacity-45"
-            type="button"
-            disabled={historyIndex >= history.length - 1}
-            onClick={() => onRestoreHistory(history.length - 1)}
-          >
-            {historyIndex >= history.length - 1 ? copy.currentCriteria : copy.reapplyCriteria}
-          </button>
+          {historyIndex !== 0 ? (
+            <button
+              className="rounded-full border border-[#ddd6fe] bg-white px-3 py-1 font-semibold text-[#6d28d9] hover:border-[#7c3aed]"
+              type="button"
+              onClick={() => onRestoreHistory(0)}
+            >
+              {copy.initialResults}
+            </button>
+          ) : null}
+          {historyIndex > 0 ? (
+            <button
+              className="rounded-full border border-[#ddd6fe] bg-white px-3 py-1 font-semibold text-[#6d28d9] hover:border-[#7c3aed]"
+              type="button"
+              onClick={() => onRestoreHistory(Math.max(0, historyIndex - 1))}
+            >
+              {copy.previousCriteria}
+            </button>
+          ) : null}
+          {historyIndex < history.length - 1 ? (
+            <button
+              className="rounded-full border border-[#ddd6fe] bg-white px-3 py-1 font-semibold text-[#6d28d9] hover:border-[#7c3aed]"
+              type="button"
+              onClick={() => onRestoreHistory(history.length - 1)}
+            >
+              {copy.reapplyCriteria}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -2555,11 +2632,6 @@ function CriteriaLensStrip({
                 {stressUpdating ? copy.stressUpdating : stressResult?.insight ?? copy.stressHelp}
               </div>
             </div>
-            {stressTop ? (
-              <span className="rounded-full border border-[#ddd6fe] bg-white px-3 py-1 text-[11px] font-bold text-[#6d28d9]">
-                {copy.stressInsight}: #{stressTop.rank}
-              </span>
-            ) : null}
           </div>
           <div className="grid gap-3 min-[760px]:grid-cols-2 min-[1220px]:grid-cols-4">
             {STRESS_CONTROLS.map((control) => {
@@ -2863,7 +2935,7 @@ function ComparisonInsights({ comparison, cellKeys, labelsByKey, language, copy 
   );
 }
 
-function ComparisonMatrix({ comparison, selectedProducts, language, copy, updating, onRemoveProduct, queryId, embedded = false }) {
+function ComparisonMatrix({ comparison, selectedProducts, language, copy, updating, onRemoveProduct, onAddToCart, onBuyNow, queryId, embedded = false }) {
   const selectedCount = selectedProducts.length;
   const [evidencePanel, setEvidencePanel] = useState({
     loading: false,
@@ -2875,16 +2947,24 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
     overlay: null,
   });
   const [sortMode, setSortMode] = useState("original");
+  const evidencePanelRef = useRef(null);
   const emptyClassName = embedded ? "bg-white text-sm text-[#565959]" : "rounded border border-[#d8b4fe] bg-white p-4 text-sm text-[#565959]";
-  const matrixClassName = embedded ? "bg-white" : "rounded border border-[#d8b4fe] bg-white p-4 shadow-lg";
+  const matrixClassName = embedded ? "relative bg-white" : "relative rounded border border-[#d8b4fe] bg-white p-4 shadow-lg";
   const productNamesById = useMemo(
     () => new Map(selectedProducts.map((product) => [product.id, buildDisplayProductName(product, language, copy)])),
     [copy, language, selectedProducts],
+  );
+  const productsById = useMemo(
+    () => new Map(selectedProducts.map((product) => [product.id, product])),
+    [selectedProducts],
   );
   const displayRowName = useCallback(
     (row) => productNamesById.get(row.productId) ?? (row?.name || (language === "ko" ? "선택 상품" : "Selected item")),
     [language, productNamesById],
   );
+  const handleScrollToEvidence = useCallback(() => {
+    evidencePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   useEffect(() => {
     setEvidencePanel({
@@ -2979,6 +3059,12 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
     );
   }
   const productColumnWidth = sortedRows.length >= 4 ? 220 : sortedRows.length === 3 ? 250 : 300;
+  const evidenceGroups = [
+    { key: "supporting", title: copy.supportingEvidence, help: copy.supportingEvidenceHelp, items: evidencePanel.overlay?.supporting ?? [] },
+    { key: "skeptical", title: copy.skepticalEvidence, help: copy.skepticalEvidenceHelp, items: evidencePanel.overlay?.skeptical ?? [] },
+  ];
+  const visibleEvidenceGroups = evidenceGroups.filter((group) => group.items.length);
+  const missingEvidenceItems = evidencePanel.overlay?.missing ?? [];
   return (
     <section className={matrixClassName}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -3017,11 +3103,35 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
               <th className="py-2 pr-4 text-[#4c1d95]">{copy.criteriaRows}</th>
               {sortedRows.map((row) => (
                 <th key={row.productId} className="py-2 pr-4 align-top">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="line-clamp-2">#{row.visibleNumber} {displayRowName(row)}</span>
-                    <button className="shrink-0 rounded border border-[#ddd6fe] px-2 py-0.5 text-[11px] text-[#6d28d9]" type="button" onClick={() => onRemoveProduct(row.productId)}>
-                      {copy.removeCompare}
-                    </button>
+                  <div className="grid gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="line-clamp-2">#{row.visibleNumber} {displayRowName(row)}</span>
+                      <button className="shrink-0 rounded border border-[#ddd6fe] px-2 py-0.5 text-[11px] text-[#6d28d9]" type="button" onClick={() => onRemoveProduct(row.productId)}>
+                        {copy.removeCompare}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        className="rounded-full bg-[#ffd814] px-2.5 py-1 text-[11px] font-bold text-[#111827] hover:bg-[#f7ca00]"
+                        type="button"
+                        onClick={() => {
+                          const product = productsById.get(row.productId);
+                          if (product) onAddToCart?.(product);
+                        }}
+                      >
+                        {copy.addToCartLower}
+                      </button>
+                      <button
+                        className="rounded-full bg-[#ffa41c] px-2.5 py-1 text-[11px] font-bold text-[#111827] hover:bg-[#fa8900]"
+                        type="button"
+                        onClick={() => {
+                          const product = productsById.get(row.productId);
+                          if (product) onBuyNow?.(product);
+                        }}
+                      >
+                        {copy.buyNow}
+                      </button>
+                    </div>
                   </div>
                 </th>
               ))}
@@ -3057,7 +3167,20 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
         </table>
       </div>
       {evidencePanel.productId ? (
-        <section className="mt-4 rounded border border-[#e9d5ff] bg-[#fbf7ff] p-3 text-sm">
+        <div className="pointer-events-none sticky bottom-3 z-20 -mt-12 flex justify-end pr-2">
+          <button
+            className="pointer-events-auto grid h-10 w-10 place-items-center rounded-full border border-[#c4b5fd] bg-white text-xl font-extrabold leading-none text-[#6d28d9] shadow-lg transition hover:border-[#7c3aed] hover:bg-[#f5f3ff]"
+            type="button"
+            aria-label={copy.scrollToSnippets}
+            title={copy.scrollToSnippets}
+            onClick={handleScrollToEvidence}
+          >
+            ↓
+          </button>
+        </div>
+      ) : null}
+      {evidencePanel.productId ? (
+        <section ref={evidencePanelRef} className="mt-4 rounded border border-[#e9d5ff] bg-[#fbf7ff] p-3 text-sm">
           <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
             <div>
               <h4 className="font-bold tracking-normal text-[#3b0764]">{copy.sourceSnippets}</h4>
@@ -3078,35 +3201,25 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
           {!evidencePanel.loading && !evidencePanel.error ? (
             evidencePanel.overlay ? (
               <div className="grid gap-3">
-                {[
-                  { key: "supporting", title: copy.supportingEvidence, items: evidencePanel.overlay.supporting ?? [] },
-                  { key: "skeptical", title: copy.skepticalEvidence, items: evidencePanel.overlay.skeptical ?? [] },
-                ].map((group) => (
+                {visibleEvidenceGroups.map((group) => (
                   <section key={group.key} className="grid gap-2">
-                    <h5 className="text-xs font-bold text-[#4c1d95]">{group.title}</h5>
-                    {group.items.length ? (
-                      group.items.slice(0, 4).map((item, index) => (
-                        <EvidenceSnippetCard key={item.id ?? `${group.key}-${item.reviewId ?? index}`} item={item} index={index} language={language} copy={copy} />
-                      ))
-                    ) : (
-                      <p className="rounded border border-[#e5e7eb] bg-white px-3 py-2 text-xs text-[#565959]">{copy.noEvidenceInfo}</p>
-                    )}
+                    <div>
+                      <h5 className="text-xs font-bold text-[#4c1d95]">{group.title}</h5>
+                      <p className="mt-0.5 text-[11px] leading-snug text-[#6d28d9]">{group.help}</p>
+                    </div>
+                    {group.items.slice(0, 4).map((item, index) => (
+                      <EvidenceSnippetCard key={item.id ?? `${group.key}-${item.reviewId ?? index}`} item={item} index={index} language={language} copy={copy} />
+                    ))}
                   </section>
                 ))}
-                {evidencePanel.overlay.missing?.length ? (
-                  <section className="grid gap-2">
-                    <h5 className="text-xs font-bold text-[#4c1d95]">{copy.missingEvidence}</h5>
-                    <div className="grid gap-1">
-                      {evidencePanel.overlay.missing.map((item) => {
-                        const text = item.key === "supporting"
-                          ? copy.missingSupportingEvidence
-                          : item.key === "skeptical"
-                            ? copy.missingSkepticalEvidence
-                            : item.label;
-                        return <p key={item.key} className="rounded border border-[#e5e7eb] bg-white px-3 py-2 text-xs text-[#565959]">{text}</p>;
-                      })}
-                    </div>
-                  </section>
+                {missingEvidenceItems.length && !visibleEvidenceGroups.length ? (
+                  <p className="rounded border border-[#e5e7eb] bg-white px-3 py-2 text-xs leading-snug text-[#565959]">
+                    <span className="font-bold text-[#4c1d95]">{copy.missingEvidence}: </span>
+                    {copy.missingEvidenceHelp}
+                  </p>
+                ) : null}
+                {!visibleEvidenceGroups.length && !missingEvidenceItems.length ? (
+                  <p className="rounded border border-[#e5e7eb] bg-white px-3 py-2 text-xs text-[#565959]">{copy.noEvidenceInfo}</p>
                 ) : null}
               </div>
             ) : evidencePanel.evidence.length ? (
@@ -3125,7 +3238,7 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
   );
 }
 
-function ComparisonMatrixDock({ comparison, selectedProducts, language, copy, updating, isOpen, onToggle, onRemoveProduct, queryId }) {
+function ComparisonMatrixDock({ comparison, selectedProducts, language, copy, updating, isOpen, onToggle, onRemoveProduct, onAddToCart, onBuyNow, queryId }) {
   const selectedCount = selectedProducts.length;
   return (
     <aside className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3 pointer-events-none">
@@ -3155,6 +3268,8 @@ function ComparisonMatrixDock({ comparison, selectedProducts, language, copy, up
               copy={copy}
               updating={updating}
               onRemoveProduct={onRemoveProduct}
+              onAddToCart={onAddToCart}
+              onBuyNow={onBuyNow}
               queryId={queryId}
               embedded
             />
@@ -3217,6 +3332,8 @@ function ProductListing({
   onFilterChange,
   onOpenProduct,
   onCart,
+  onAddToCart,
+  onBuyNow,
   onToggleDimension,
   onStressWeightChange,
   onClarifyCriteria,
@@ -3285,6 +3402,7 @@ function ProductListing({
       .filter(Boolean),
     [aiLens.items, products, selectedComparisonIds],
   );
+  const recommendedProductId = stressResult?.items?.[0]?.productId ?? stressResult?.baseline?.[0]?.productId ?? "";
 
   const title = listing.title
     ? listing.title
@@ -3349,6 +3467,7 @@ function ProductListing({
                     copy={copy}
                     aiActive={aiLens.status === "applied"}
                     selected={selectedComparisonIds.includes(product.id)}
+                    recommended={aiLens.status === "applied" && product.id === recommendedProductId}
                     onOpen={onOpenProduct}
                     onToggleSelect={onToggleCompareProduct}
                   />
@@ -3400,6 +3519,8 @@ function ProductListing({
           isOpen={isComparisonDockOpen}
           onToggle={() => setIsComparisonDockOpen((current) => !current)}
           onRemoveProduct={(productId) => onToggleCompareProduct({ id: productId })}
+          onAddToCart={onAddToCart}
+          onBuyNow={onBuyNow}
           queryId={aiLens.queryId}
         />
       ) : null}
@@ -4331,6 +4452,14 @@ export default function App() {
     [copy.addedToCart, showToast],
   );
 
+  const handleBuyNow = useCallback(
+    (product) => {
+      handleAddToCart(product);
+      setView("cart");
+    },
+    [handleAddToCart],
+  );
+
   const handleQuantityChange = useCallback((key, quantity) => {
     setCart((current) => current.map((item) => (item.key === key ? { ...item, quantity } : item)));
   }, []);
@@ -4573,6 +4702,8 @@ export default function App() {
           onFilterChange={handleFilterChange}
           onOpenProduct={handleOpenProduct}
           onCart={() => setView("cart")}
+          onAddToCart={handleAddToCart}
+          onBuyNow={handleBuyNow}
           onToggleDimension={handleToggleDimension}
           onStressWeightChange={handleStressWeightChange}
           onClarifyCriteria={handleClarifyCriteria}
