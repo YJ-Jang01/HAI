@@ -36,6 +36,7 @@
     "dataset:semantic:amazon2023": "tsx scripts/enrich-amazon-2023-semantics.ts",
     "query:evaluate:amazon": "tsx scripts/evaluate-amazon-query-corpus.ts",
     "query:test:amazon": "tsx scripts/evaluate-amazon-query-corpus.ts --api",
+    "query:evaluate:amazon2023-llm": "tsx scripts/evaluate-amazon2023-llm-decomposition.ts",
     "db:setup:amazon": "pnpm run db:migrate && pnpm run db:seed:amazon"
   },
   "dependencies": {

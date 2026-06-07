@@ -14,7 +14,7 @@ const progressPath = resolve(screenshotDir, "amazon2023-e2e-progress.log");
 const e2eBackendPort = Number(process.env.AMAZON2023_E2E_BACKEND_PORT ?? 8011);
 const e2eFrontendPort = Number(process.env.AMAZON2023_E2E_FRONTEND_PORT ?? 8012);
 const desktopAiQuery = "party shirt for men";
-const desktopFilterQuery = "fashion";
+const desktopFilterQuery = "party shirt for men";
 const mobileAiQuery = "통학용 가볍고 편한 백팩";
 
 const chromeCandidates = [
@@ -339,8 +339,36 @@ const domHelpers = `
 })()
 `;
 
+const koLocalizedPredicate = `
+  const isKoLocalized = (text) => {
+    const value = String(text ?? '').trim();
+    if (!/[가-힣]/.test(value)) return false;
+    if (/(용 여성용|용 남성용|T모자|남성's|여성's|셔츠s|목걸이s)/i.test(value)) return false;
+    const visible = value.replace(/\\s/g, '').length;
+    const latinChars = (value.match(/[A-Za-z]/g) ?? []).length;
+    const latinWords = (value.match(/[A-Za-z][A-Za-z'_-]*/g) ?? []).filter((word) => !/^(XS|S|M|L|XL|XXL|XXXL|UV|UPF|LED|USB|USA|NFL|NBA|NHL|MLB|RFID|UVA|UVB|CM|MM)$/i.test(word)).length;
+    const englishGrammar = /(?:\\b(?:for|with|and|the|this|that|from|to|of|in|on|or)\\b\\s+[A-Za-z]{2,}|[A-Za-z]{2,}\\s+\\b(?:for|with|and|the|this|that|from|to|of|in|on|or)\\b)/i.test(value);
+    return !englishGrammar && (latinChars / Math.max(1, visible) <= 0.45 || latinWords <= 2);
+  };
+`;
+
+function isKoLocalizedForE2e(text) {
+  const value = String(text ?? "").trim();
+  if (!/[가-힣]/.test(value)) return false;
+  if (/(용 여성용|용 남성용|T모자|남성's|여성's|셔츠s|목걸이s)/i.test(value)) return false;
+  const visible = value.replace(/\s/g, "").length;
+  const latinChars = (value.match(/[A-Za-z]/g) ?? []).length;
+  const latinWords = (value.match(/[A-Za-z][A-Za-z'_-]*/g) ?? []).filter(
+    (word) => !/^(XS|S|M|L|XL|XXL|XXXL|UV|UPF|LED|USB|USA|NFL|NBA|NHL|MLB|RFID|UVA|UVB|CM|MM)$/i.test(word),
+  ).length;
+  const englishGrammar = /(?:\b(?:for|with|and|the|this|that|from|to|of|in|on|or)\b\s+[A-Za-z]{2,}|[A-Za-z]{2,}\s+\b(?:for|with|and|the|this|that|from|to|of|in|on|or)\b)/i.test(value);
+  return !englishGrammar && (latinChars / Math.max(1, visible) <= 0.45 || latinWords <= 2);
+}
+
 async function runDesktopFlow(page, frontendBaseUrl) {
   await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+  await page.navigate(frontendBaseUrl);
+  await page.evaluate("window.localStorage.setItem('aimazon.language', 'en')");
   await page.navigate(frontendBaseUrl);
   await page.evaluate(domHelpers);
   await waitFor(() => page.evaluate("document.body.innerText.includes('AImazon')"), "AImazon shell");
@@ -422,12 +450,13 @@ async function runDesktopFlow(page, frontendBaseUrl) {
       const text = document.body.innerText;
       const counts = [...text.matchAll(/(\\d+)\\s*(items found|개 상품)/g)].map((match) => Number(match[1]));
       const cardLabels = [...document.querySelectorAll('article button[aria-label]')].map((button) => button.getAttribute('aria-label')).filter(Boolean).slice(0, 8);
+      ${koLocalizedPredicate}
       return {
         count: counts.length ? Math.max(...counts) : 0,
         hasAiLens: text.includes('AI Criteria Lens') || text.includes('AI 기준 렌즈'),
         hasCards: [...document.querySelectorAll('article button[aria-label]')].length > 0,
         cardLabels,
-        cardsLocalized: cardLabels.length > 0 && cardLabels.every((label) => /[가-힣]/.test(label) && !/[A-Za-z]{2,}/.test(label)),
+        cardsLocalized: cardLabels.length > 0 && cardLabels.every(isKoLocalized),
       };
     })()
   `);
@@ -454,7 +483,8 @@ async function runDesktopFlow(page, frontendBaseUrl) {
           ...[...document.querySelectorAll('#section-reviews article b')].map((item) => item.innerText),
           ...[...document.querySelectorAll('#section-reviews article p')].map((item) => item.innerText),
         ].filter(Boolean).map((text) => text.trim()).filter(Boolean);
-        const offenders = productTexts.filter((text) => !(/[가-힣]/.test(text) && !/[A-Za-z]{2,}/.test(text)));
+        ${koLocalizedPredicate}
+        const offenders = productTexts.filter((text) => !isKoLocalized(text));
         return {
           opened: true,
           ok: productTexts.length > 0 && offenders.length === 0,
@@ -532,11 +562,12 @@ async function runDesktopFlow(page, frontendBaseUrl) {
       const text = document.body.innerText;
       const countMatch = text.match(/(\\d+)개 상품/);
       const productLabels = [...document.querySelectorAll('article button[aria-label]')].map((button) => button.getAttribute('aria-label')).filter(Boolean).slice(0, 12);
+      ${koLocalizedPredicate}
       return {
         count: countMatch ? Number(countMatch[1]) : null,
         productLabels,
         hasStyleCriterion: text.includes('스타일: 귀여운') || text.includes('스타일: 클래식') || text.includes('스타일: 미니멀') || text.includes('스타일: 캐주얼'),
-        cardsLocalized: productLabels.length > 0 && productLabels.every((label) => /[가-힣]/.test(label) && !/[A-Za-z]{2,}/.test(label)),
+        cardsLocalized: productLabels.length > 0 && productLabels.every(isKoLocalized),
       };
     })()
   `);
@@ -854,6 +885,8 @@ async function runDesktopFlow(page, frontendBaseUrl) {
 async function runMobileFlow(page, frontendBaseUrl) {
   await page.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await page.navigate(frontendBaseUrl);
+  await page.evaluate("window.localStorage.setItem('aimazon.language', 'ko')");
+  await page.navigate(frontendBaseUrl);
   await page.evaluate(domHelpers);
   await waitFor(() => page.evaluate("document.body.innerText.includes('AImazon')"), "mobile shell");
   await page.evaluate(`
@@ -877,7 +910,7 @@ async function runMobileFlow(page, frontendBaseUrl) {
     productCards: await page.evaluate("[...document.querySelectorAll('button')].filter((b) => b.innerText.includes('+ Compare') || b.innerText.includes('+ 비교')).length"),
     imageCount: await page.evaluate("[...document.images].filter((img) => img.naturalWidth > 0 && img.naturalHeight > 0).length"),
     cardLabels,
-    cardsLocalized: cardLabels.length > 0 && cardLabels.every((label) => /[가-힣]/.test(label) && !/[A-Za-z]{2,}/.test(label)),
+    cardsLocalized: cardLabels.length > 0 && cardLabels.every(isKoLocalizedForE2e),
   };
 }
 

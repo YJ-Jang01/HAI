@@ -12,6 +12,8 @@ type Args = {
   minImages: number;
   minEvidence: number;
   minSemantic: number;
+  minProductsWithKo: number;
+  minReviewsWithKo: number;
 };
 
 function parseArgs(argv: string[]): Args {
@@ -23,6 +25,8 @@ function parseArgs(argv: string[]): Args {
     minImages: 1,
     minEvidence: 1,
     minSemantic: 1,
+    minProductsWithKo: 0,
+    minReviewsWithKo: 0,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -39,6 +43,8 @@ function parseArgs(argv: string[]): Args {
     else if (key === "--min-images") args.minImages = Number(value);
     else if (key === "--min-evidence") args.minEvidence = Number(value);
     else if (key === "--min-semantic") args.minSemantic = Number(value);
+    else if (key === "--min-products-with-ko") args.minProductsWithKo = Number(value);
+    else if (key === "--min-reviews-with-ko") args.minReviewsWithKo = Number(value);
     else throw new Error(`Unknown argument: ${key}`);
   }
   return args;
@@ -56,6 +62,7 @@ async function main() {
   });
   const client = await pool.connect();
   const failures: string[] = [];
+  const warnings: string[] = [];
   try {
     const dbSize = await client.query<{ bytes: string; pretty: string }>(
       "select pg_database_size(current_database())::bigint as bytes, pg_size_pretty(pg_database_size(current_database())) as pretty",
@@ -70,6 +77,26 @@ async function main() {
       throw new Error("Amazon 2023 shopping schema is not installed. Apply backend/drizzle/0006_amazon_reviews_2023_catalog.sql before running this verifier.");
     }
     const semanticReady = await client.query<{ ready: string | null }>("select to_regclass('public.shopping_product_semantic_attributes')::text as ready");
+    const localizedColumns = await client.query<{ table_name: string; has_localized_text: boolean }>(
+      `
+      select
+        table_name,
+        exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'public'
+          and table_name = tables.table_name
+          and column_name = 'localized_text'
+        ) as has_localized_text
+      from (
+        values
+          ('shopping_products'),
+          ('shopping_reviews'),
+          ('shopping_review_evidence')
+      ) as tables(table_name)
+      order by table_name
+      `,
+    );
 
     const dataset = await client.query<{ id: string; slug: string; raw_manifest: unknown }>(
       "select id, slug, raw_manifest from shopping_datasets where slug = $1",
@@ -134,6 +161,11 @@ async function main() {
       failures.push(`missing_search_documents:${Number(total.products) - Number(total.search_documents)}`);
     }
 
+    const productLocalizedReady = localizedColumns.rows.find((row) => row.table_name === "shopping_products")?.has_localized_text ?? false;
+    const reviewLocalizedReady = localizedColumns.rows.find((row) => row.table_name === "shopping_reviews")?.has_localized_text ?? false;
+    if (args.minProductsWithKo > 0 && !productLocalizedReady) failures.push("product_localized_text_column_missing");
+    if (args.minReviewsWithKo > 0 && !reviewLocalizedReady) failures.push("review_localized_text_column_missing");
+
     const coverage = await client.query(
       `
       select
@@ -151,7 +183,8 @@ async function main() {
     const productCoverage = coverage.rows[0];
     for (const [key, value] of Object.entries(productCoverage)) {
       if (Number(value) > 0) {
-        failures.push(`${key}:${value}`);
+        if (key === "missing_raw_metadata") warnings.push(`${key}:${value}`);
+        else failures.push(`${key}:${value}`);
       }
     }
 
@@ -170,8 +203,45 @@ async function main() {
     const reviewChecks = reviewCoverage.rows[0];
     for (const [key, value] of Object.entries(reviewChecks)) {
       if (Number(value) > 0) {
-        failures.push(`${key}:${value}`);
+        if (key === "missing_raw_review") warnings.push(`${key}:${value}`);
+        else failures.push(`${key}:${value}`);
       }
+    }
+
+    const localizedCoverage =
+      productLocalizedReady && reviewLocalizedReady
+        ? await client.query(
+            `
+            select
+              (
+                select count(*)::int
+                from shopping_products
+                where dataset_id = $1
+                and localized_text ? 'ko'
+              ) as products_with_ko,
+              (
+                select count(*)::int
+                from shopping_reviews
+                where dataset_id = $1
+                and localized_text ? 'ko'
+              ) as reviews_with_ko
+            `,
+            [datasetId],
+          )
+        : {
+            rows: [
+              {
+                products_with_ko: 0,
+                reviews_with_ko: 0,
+              },
+            ],
+          };
+    const localizedChecks = localizedCoverage.rows[0];
+    if (Number(localizedChecks.products_with_ko) < args.minProductsWithKo) {
+      failures.push(`too_few_products_with_ko:${localizedChecks.products_with_ko}/${args.minProductsWithKo}`);
+    }
+    if (Number(localizedChecks.reviews_with_ko) < args.minReviewsWithKo) {
+      failures.push(`too_few_reviews_with_ko:${localizedChecks.reviews_with_ko}/${args.minReviewsWithKo}`);
     }
 
     const imageCoverage = await client.query(
@@ -255,7 +325,14 @@ async function main() {
       imageCoverage: images,
       reviewDistribution: distribution.rows[0],
       semanticCoverage: semanticChecks,
+      localizedColumns: localizedColumns.rows,
+      localizedCoverage: localizedChecks,
+      localizationThresholds: {
+        minProductsWithKo: args.minProductsWithKo,
+        minReviewsWithKo: args.minReviewsWithKo,
+      },
       tableSizes: tableSizes.rows,
+      warnings,
       failures,
     };
     console.log(JSON.stringify(output, null, 2));

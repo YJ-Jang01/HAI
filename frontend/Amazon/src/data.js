@@ -422,10 +422,11 @@ function ratingBreakdownObject(rows = []) {
   return Object.fromEntries(rows.map((row) => [row.ratingValue, row.percentage]));
 }
 
-function normalizeReview(review) {
+function normalizeReview(review, locale = "en") {
   const timestamp = review.reviewTimestamp ?? review.date;
+  const dateLocale = locale === "ko" ? "ko-KR" : "en-US";
   const date = timestamp
-    ? new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(new Date(timestamp))
+    ? new Intl.DateTimeFormat(dateLocale, { month: "long", day: "numeric", year: "numeric" }).format(new Date(timestamp))
     : "";
   return {
     ...review,
@@ -464,7 +465,7 @@ function cleanDemoText(value, product, kind = "description") {
   return `${productName} is a ${material ? `${material} ` : ""}${category} for ${occasion ? String(occasion).toLowerCase() : "everyday"} use, with fit, material, and review signals available for comparison.`;
 }
 
-export function normalizeProduct(product) {
+export function normalizeProduct(product, locale = "en") {
   const attributeColors = getAttributeValues(product, "colorFamily");
   const rawColors = product.colors ?? (attributeColors.length ? attributeColors : getDetailsValue(product, ["Color", "Color Name", "Colour"]));
   const colors = Array.isArray(rawColors) ? rawColors : [rawColors].filter(Boolean);
@@ -506,7 +507,7 @@ export function normalizeProduct(product) {
     ratingDetail: product.ratingDetail ?? ratingBreakdownObject(product.ratingBreakdown),
     desc: cleanDemoText(productDescription, { ...product, name: productName }),
     brandStory: cleanDemoText(product.brandStory ?? "", product, "brand"),
-    reviews: (product.reviews ?? []).map(normalizeReview),
+    reviews: (product.reviews ?? []).map((review) => normalizeReview(review, locale)),
     reviewEvidence: product.reviewEvidence ?? [],
     semanticAttributes,
     ai: product.decisionEvidence ?? null,
@@ -549,7 +550,7 @@ export async function loadCatalog({ locale = "en" } = {}) {
       return {
         categories: categoryResponse.categories ?? categoryResponse.navigation ?? [],
         navigation: categoryResponse.navigation ?? categoryResponse.categories ?? [],
-        products: products.map(normalizeProduct),
+        products: products.map((product) => normalizeProduct(product, locale)),
         reviews: [],
       };
     })
@@ -620,7 +621,7 @@ export async function searchCatalogProducts({
   if (careEaseLevelMin !== undefined && careEaseLevelMin !== null) params.set("careEaseLevelMin", String(careEaseLevelMin));
   if (waterproof !== undefined && waterproof !== null && waterproof !== "") params.set("waterproof", String(waterproof));
   const page = await apiJson(`${AMAZON_CATALOG_API_PREFIX}/products?${params.toString()}`);
-  return (page.items ?? []).map(normalizeProduct);
+  return (page.items ?? []).map((product) => normalizeProduct(product, locale));
 }
 
 export async function loadCatalogFacets({
@@ -671,17 +672,18 @@ export async function loadCatalogFacets({
 export async function loadProductDetail(productId, { locale = "en" } = {}) {
   const params = appendLocale(new URLSearchParams(), locale);
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  return normalizeProduct(await apiJson(`${AMAZON_CATALOG_API_PREFIX}/products/${encodeURIComponent(productId)}${suffix}`));
+  return normalizeProduct(await apiJson(`${AMAZON_CATALOG_API_PREFIX}/products/${encodeURIComponent(productId)}${suffix}`), locale);
 }
 
 export async function runAiQuery(payload) {
+  const locale = payload?.session?.locale === "ko" ? "ko" : "en";
   const response = await apiJson(`${AMAZON_AI_API_PREFIX}/query`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
   return {
     ...response,
-    items: (response.items ?? []).map(normalizeProduct),
+    items: (response.items ?? []).map((product) => normalizeProduct(product, locale)),
   };
 }
 
@@ -692,11 +694,18 @@ export async function interpretAiQuery(payload) {
   });
 }
 
-export async function loadAiEvidence({ queryId, productId, dimension }) {
-  const params = new URLSearchParams();
+export async function loadAiEvidence({ queryId, productId, dimension, locale = "en" }) {
+  const params = appendLocale(new URLSearchParams(), locale);
   if (dimension) params.set("dimension", dimension);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return apiJson(`${AMAZON_AI_API_PREFIX}/query/${encodeURIComponent(queryId)}/items/${encodeURIComponent(productId)}/evidence${suffix}`);
+}
+
+export async function loadAiStressTest(payload) {
+  return apiJson(`${AMAZON_AI_API_PREFIX}/stress-test`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function compareAiProducts(payload) {
@@ -707,13 +716,14 @@ export async function compareAiProducts(payload) {
 }
 
 export async function refineAiQuery(payload) {
+  const locale = payload?.locale === "ko" ? "ko" : "en";
   const response = await apiJson(`${AMAZON_AI_API_PREFIX}/refine`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
   return {
     ...response,
-    items: (response.items ?? []).map(normalizeProduct),
+    items: (response.items ?? []).map((product) => normalizeProduct(product, locale)),
   };
 }
 

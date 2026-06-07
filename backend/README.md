@@ -95,6 +95,12 @@ pnpm run db:verify:amazon2023 -- --dataset-slug amazon-fashion-2023 --max-db-mb 
 
 `db:verify:amazon` is currently an alias for the Amazon 2023 verifier. Prefer `db:verify:amazon2023` in new docs and scripts.
 
+## Korean Localization
+
+Amazon 2023 Korean display text is stored in `localized_text.ko` JSON on product, review, and review-evidence rows. English source text remains in the normalized columns. Catalog and AI endpoints accept `locale=ko`; when Korean text is missing they fall back to the English source fields.
+
+Use `pnpm run db:verify:amazon2023 -- --dataset-slug amazon-fashion-2023 --min-products-with-ko <expected-products> --min-reviews-with-ko <expected-reviews>` to verify localized row coverage.
+
 ## API Surface
 
 Catalog:
