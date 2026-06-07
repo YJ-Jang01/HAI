@@ -17,9 +17,11 @@ import {
 
 export type Amazon2023Sort = "title_asc" | "price_asc" | "price_desc" | "rating_desc" | "review_count_desc";
 export type Amazon2023ProductView = "card" | "detail";
+export type Amazon2023Locale = "en" | "ko";
 
 export type Amazon2023ProductFilters = {
   datasetSlug?: string;
+  locale?: Amazon2023Locale;
   query?: string;
   category?: string;
   subCategory?: string;
@@ -67,6 +69,43 @@ function jsonArray<T = unknown>(value: unknown): T[] {
 
 function jsonRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function localeText(value: unknown, locale: Amazon2023Locale) {
+  if (locale !== "ko") {
+    return {};
+  }
+  return jsonRecord(jsonRecord(value)[locale]);
+}
+
+function localizedString(localizedText: unknown, locale: Amazon2023Locale, key: string, fallback: string | null | undefined) {
+  const value = localeText(localizedText, locale)[key];
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === "번역완료" || trimmed === "번역 완료") {
+    return fallback;
+  }
+  return trimmed;
+}
+
+function localizedStringArray(localizedText: unknown, locale: Amazon2023Locale, key: string, fallback: string[]) {
+  const value = localeText(localizedText, locale)[key];
+  if (!Array.isArray(value)) {
+    return fallback;
+  }
+  const localizedValues = value.map((item) => (typeof item === "string" ? item.trim() : "")).filter(Boolean);
+  return localizedValues.length ? localizedValues : fallback;
+}
+
+function localizedDetails(localizedText: unknown, locale: Amazon2023Locale, fallback: Record<string, unknown>) {
+  const value = localeText(localizedText, locale).details;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return fallback;
+  }
+  const localizedValues = Object.fromEntries(Object.entries(value).filter(([, entry]) => typeof entry === "string" && entry.trim()));
+  return Object.keys(localizedValues).length ? { ...fallback, ...localizedValues } : fallback;
 }
 
 const COLOR_GROUPS: Record<string, { label: string; aliases: string[] }> = {
@@ -118,6 +157,8 @@ const SEARCH_QUERY_ALIASES: Record<string, string[]> = {
   "남자": ["men", "mens", "male"],
   "니트": ["knit", "sweater", "sweaters"],
   "데일리": ["daily", "casual"],
+  "일상": ["daily", "casual", "everyday"],
+  "일상용": ["daily", "casual", "everyday"],
   "드레스": ["dress", "dresses"],
   "따뜻한": ["warm", "winter"],
   "면접": ["interview", "office", "formal", "dress shoes"],
@@ -137,12 +178,15 @@ const SEARCH_QUERY_ALIASES: Record<string, string[]> = {
   "바캉스": ["vacation", "resort", "beach", "summer", "travel"],
   "블라우스": ["blouse", "blouses"],
   "셔츠": ["shirt", "shirts", "top", "tops", "tee", "t-shirt"],
+  "손목시계": ["watch", "watches", "wristwatch"],
   "스니커즈": ["sneaker", "sneakers", "shoes", "footwear"],
   "스웨터": ["sweater", "sweaters"],
   "스카프": ["scarf", "scarves"],
   "스커트": ["skirt", "skirts"],
   "슬랙스": ["slacks", "pants", "trousers"],
   "신발": ["shoe", "shoes", "footwear", "sneaker", "boot"],
+  "시계": ["watch", "watches", "wristwatch"],
+  "상의": ["top", "tops", "shirt", "shirts", "tee", "t-shirt"],
   "아우터": ["outerwear", "coat", "jacket"],
   "여름": ["summer", "breathable", "lightweight"],
   "여름용": ["summer", "breathable", "lightweight"],
@@ -153,6 +197,8 @@ const SEARCH_QUERY_ALIASES: Record<string, string[]> = {
   "원피스": ["dress", "dresses"],
   "파티": ["party", "event", "evening"],
   "파티용": ["party", "event", "evening"],
+  "캐주얼": ["casual", "daily", "everyday"],
+  "캐쥬얼": ["casual", "daily", "everyday"],
   "피서": ["vacation", "resort", "beach", "summer", "travel"],
   "피서용": ["vacation", "resort", "beach", "summer", "travel"],
   "자켓": ["jacket", "jackets", "outerwear"],
@@ -227,6 +273,7 @@ function inferProductType(path: string[], title: string | null | undefined, main
     ["Flats", /\bflat\b/],
     ["Oxfords", /\boxford\b/],
     ["Slippers", /\bslipper\b/],
+    ["Watches", /\b(?!watch cap\b)(watch|watches|wristwatch|timepiece|chronograph)\b/],
     ["Shirt Dresses", /\bshirt dress\b/],
     ["Dresses", /\bdress\b/],
     ["Blouses", /\bblouse\b/],
@@ -288,6 +335,46 @@ function aliasSearchTerms(query: string) {
 
 function normalizeSearchTokens(query: string) {
   return [...new Set(aliasSearchTerms(query).flatMap((term) => term.replace(/[^\p{L}\p{N}]+/gu, " ").split(/\s+/)).filter((token) => token.length > 1))].slice(0, 24);
+}
+
+function queryWithAliases(query: string | undefined) {
+  if (!query) {
+    return "";
+  }
+  return normalizeSearchTokens(query).join(" ");
+}
+
+function inferStructuredFiltersFromQuery(query: string | undefined): Partial<Amazon2023ProductFilters> {
+  const text = `${query ?? ""} ${queryWithAliases(query)}`.toLowerCase();
+  if (!text.trim()) {
+    return {};
+  }
+  const inferred: Partial<Amazon2023ProductFilters> = {};
+  const watchIntent = /\b(watches?|wristwatches?|timepieces?|chronographs?)\b|시계|손목시계/i.test(text);
+  const hatIntent = /\b(watch cap|caps?|hats?|beanies?)\b|모자|비니/i.test(text);
+  if (watchIntent && !hatIntent) {
+    inferred.category = "Watches";
+    inferred.subCategory = "Watches";
+  }
+  if (/\b(t[- ]?shirts?|tees?)\b|티셔츠|반팔티/i.test(text)) {
+    inferred.category = "Tops";
+    inferred.subCategory = "Tees";
+  } else if (/\b(tops?|shirts?|blouses?)\b|상의|셔츠|블라우스/i.test(text)) {
+    inferred.category = "Tops";
+  }
+  if (/\b(girls?|girl's)\b|여아|여자아이/i.test(text)) {
+    inferred.genderTarget = "girls";
+  } else if (/\b(boys?|boy's)\b|남아|남자아이/i.test(text)) {
+    inferred.genderTarget = "boys";
+  } else if (/\b(women|woman|women's|female|ladies)\b|여성|여자/i.test(text)) {
+    inferred.genderTarget = "women";
+  } else if (/\b(men|men's|mens|male)\b|남성|남자/i.test(text)) {
+    inferred.genderTarget = "men";
+  }
+  if (/\b(casual|daily|everyday)\b|캐주얼|캐쥬얼|데일리|일상/i.test(text)) {
+    inferred.style = "casual";
+  }
+  return inferred;
 }
 
 export async function getActiveAmazon2023Dataset(datasetSlug?: string) {
@@ -368,6 +455,8 @@ function productTypePatterns(value: string) {
     backpacks: { include: ["%backpack%", "%daypack%"] },
     "crossbody bags": { include: ["%crossbody%"] },
     totes: { include: ["%tote%", "%shopper%"] },
+    watch: { include: ["%watch%", "%wristwatch%", "%timepiece%", "%chronograph%"], exclude: ["%watch cap%", "%cap%", "%hat%", "%beanie%"] },
+    watches: { include: ["%watch%", "%wristwatch%", "%timepiece%", "%chronograph%"], exclude: ["%watch cap%", "%cap%", "%hat%", "%beanie%"] },
   };
   return patterns[normalized];
 }
@@ -518,17 +607,23 @@ function sleeveLengthFilter(value: string) {
 
 function buildProductFilters(dataset: ShoppingDataset, params: Amazon2023ProductFilters) {
   const filters: SQL[] = [eq(shoppingProducts.datasetId, dataset.id)];
+  const inferred = inferStructuredFiltersFromQuery(params.query);
 
   if (params.query) {
     filters.push(queryFilter(params.query));
   }
 
-  if (params.category) {
-    filters.push(categoryPathFilter(dataset, params.category));
+  const category = params.category ?? inferred.category;
+  const subCategory = params.subCategory ?? inferred.subCategory;
+  const genderTarget = params.genderTarget ?? inferred.genderTarget;
+  const style = params.style ?? inferred.style;
+
+  if (category) {
+    filters.push(categoryPathFilter(dataset, category));
   }
 
-  if (params.subCategory) {
-    filters.push(productTypeFilter(dataset, params.subCategory));
+  if (subCategory) {
+    filters.push(productTypeFilter(dataset, subCategory));
   }
 
   if (params.color) {
@@ -551,8 +646,8 @@ function buildProductFilters(dataset: ShoppingDataset, params: Amazon2023Product
   if (params.ratingMax !== undefined) {
     filters.push(lte(shoppingProducts.averageRating, String(params.ratingMax)));
   }
-  if (params.genderTarget) {
-    filters.push(semanticTextFilter(dataset, "genderTarget", params.genderTarget, params));
+  if (genderTarget) {
+    filters.push(semanticTextFilter(dataset, "genderTarget", genderTarget, params));
   }
   if (params.occasion) {
     filters.push(semanticTextFilter(dataset, "occasion", params.occasion, params));
@@ -563,8 +658,8 @@ function buildProductFilters(dataset: ShoppingDataset, params: Amazon2023Product
   if (params.material) {
     filters.push(semanticTextFilter(dataset, "material", params.material, params));
   }
-  if (params.style) {
-    filters.push(semanticTextFilter(dataset, "style", params.style, params));
+  if (style) {
+    filters.push(semanticTextFilter(dataset, "style", style, params));
   }
   if (params.sleeveLength) {
     filters.push(sleeveLengthFilter(params.sleeveLength));
@@ -679,23 +774,26 @@ function serializeProductSummary(
   image?: typeof shoppingProductImages.$inferSelect,
   view: Amazon2023ProductView = "card",
   semanticRows: Array<typeof shoppingProductSemanticAttributes.$inferSelect> = [],
+  locale: Amazon2023Locale = "en",
 ) {
-  const details = jsonRecord(product.details);
-  const features = jsonArray<string>(product.features);
+  const sourceDetails = jsonRecord(product.details);
+  const details = localizedDetails(product.localizedText, locale, sourceDetails);
+  const features = localizedStringArray(product.localizedText, locale, "features", jsonArray<string>(product.features));
   const categoryPath = jsonArray<string>(product.categoryPath);
   const normalizedParentCategory = inferParentCategory(categoryPath, product.title, product.mainCategory);
   const productType = inferProductType(categoryPath, product.title, product.mainCategory);
-  const colors = detailValues(details, ["Color", "Color Name", "Colour"]).map(normalizeColorGroup);
-  const sizes = detailValues(details, ["Size", "Size Name", "Department"]);
+  const colors = detailValues(sourceDetails, ["Color", "Color Name", "Colour"]).map(normalizeColorGroup);
+  const sizes = detailValues(sourceDetails, ["Size", "Size Name", "Department"]);
   const semanticAttributes = semanticRows.map(serializeSemanticAttribute);
+  const title = localizedString(product.localizedText, locale, "title", product.title) ?? product.title;
   return {
     id: product.id,
     sourceProductId: product.sourceProductId,
     parentAsin: product.parentAsin,
     asin: product.asin,
     slug: product.slug,
-    title: product.title,
-    name: product.title,
+    title,
+    name: title,
     brand: product.brand ?? product.store,
     store: product.store,
     price: nullableNumber(product.priceAmount),
@@ -725,6 +823,7 @@ function serializeProductSummary(
     semanticAttributes,
     features: view === "detail" ? features : features.slice(0, 4),
     details: view === "detail" ? details : undefined,
+    localizedTextAvailable: locale === "ko" && Object.keys(localeText(product.localizedText, locale)).length > 0,
   };
 }
 
@@ -861,7 +960,7 @@ export async function searchAmazon2023Products(params: Amazon2023ProductSearchPa
 
   return {
     dataset: dataset.slug,
-    items: rows.map((row) => serializeProductSummary(row, imageMap.get(row.id), view, semanticMap.get(row.id))),
+    items: rows.map((row) => serializeProductSummary(row, imageMap.get(row.id), view, semanticMap.get(row.id), params.locale ?? "en")),
     sort: params.sort,
     pagination: {
       limit: params.limit,
@@ -1067,7 +1166,22 @@ export async function getAmazon2023Facets(params: Amazon2023ProductFilters) {
   };
 }
 
-function serializeEvidence(item: typeof shoppingReviewEvidence.$inferSelect) {
+function localizedReviewEvidenceText(review: typeof shoppingReviews.$inferSelect | undefined, locale: Amazon2023Locale) {
+  if (!review || locale !== "ko") {
+    return null;
+  }
+  const title = localizedString(review.localizedText, locale, "title", review.title);
+  const body = localizedString(review.localizedText, locale, "body", review.body);
+  const text = [title, body].map((item) => item?.trim()).filter(Boolean).join(" - ");
+  return text || null;
+}
+
+function serializeEvidence(item: typeof shoppingReviewEvidence.$inferSelect, locale: Amazon2023Locale = "en", review?: typeof shoppingReviews.$inferSelect) {
+  const evidenceText =
+    localizedReviewEvidenceText(review, locale) ??
+    localizedString(item.localizedText, locale, "evidenceText", item.evidenceText) ??
+    localizedString(item.localizedText, locale, "text", item.evidenceText) ??
+    item.evidenceText;
   return {
     id: item.id,
     reviewId: item.reviewId,
@@ -1075,8 +1189,8 @@ function serializeEvidence(item: typeof shoppingReviewEvidence.$inferSelect) {
     attributeKey: item.attributeKey,
     attributeLabel: item.attributeLabel,
     sentiment: item.sentiment,
-    evidenceText: item.evidenceText,
-    text: item.evidenceText,
+    evidenceText,
+    text: evidenceText,
     issueType: item.issueType,
     confidence: nullableNumber(item.confidence),
     source: item.source,
@@ -1089,7 +1203,7 @@ function pushGrouped<T extends { productId: string }>(map: Map<string, T[]>, row
   map.set(row.productId, rows);
 }
 
-async function hydrateAmazon2023Products(products: ShoppingProduct[]) {
+async function hydrateAmazon2023Products(products: ShoppingProduct[], locale: Amazon2023Locale = "en") {
   if (!products.length) {
     return [];
   }
@@ -1154,9 +1268,11 @@ async function hydrateAmazon2023Products(products: ShoppingProduct[]) {
   return products.map((product) => {
     const productImages = imagesByProduct.get(product.id) ?? [];
     const productAttributes = attributesByProduct.get(product.id) ?? [];
-    const productReviews = (reviewsByProduct.get(product.id) ?? []).slice(0, 25);
+    const allProductReviews = reviewsByProduct.get(product.id) ?? [];
+    const productReviews = allProductReviews.slice(0, 25);
     const productEvidence = (evidenceByProduct.get(product.id) ?? []).slice(0, 100);
     const productCategories = categoriesByProduct.get(product.id) ?? [];
+    const reviewById = new Map(allProductReviews.map((review) => [review.id, review]));
     const evidenceByReview = new Map<string, typeof productEvidence>();
 
     for (const item of productEvidence) {
@@ -1166,10 +1282,9 @@ async function hydrateAmazon2023Products(products: ShoppingProduct[]) {
     }
 
     return {
-      ...serializeProductSummary(product, productImages[0], "detail"),
-      description: jsonArray<string>(product.description),
-      descriptionText: product.descriptionText,
-      rawMetadata: product.rawMetadata,
+      ...serializeProductSummary(product, productImages[0], "detail", semanticsByProduct.get(product.id), locale),
+      description: localizedStringArray(product.localizedText, locale, "description", jsonArray<string>(product.description)),
+      descriptionText: localizedString(product.localizedText, locale, "descriptionText", product.descriptionText),
       images: productImages.map((image) => ({
         id: image.id,
         sourceUrl: image.sourceUrl,
@@ -1204,20 +1319,19 @@ async function hydrateAmazon2023Products(products: ShoppingProduct[]) {
         id: review.id,
         sourceReviewId: review.sourceReviewId,
         rating: review.rating,
-        title: review.title,
-        body: review.body,
+        title: localizedString(review.localizedText, locale, "title", review.title),
+        body: localizedString(review.localizedText, locale, "body", review.body) ?? review.body,
         helpfulVote: review.helpfulVote,
         verifiedPurchase: review.verifiedPurchase,
         reviewTimestamp: review.reviewTimestamp,
-        rawReview: review.rawReview,
-        evidence: (evidenceByReview.get(review.id) ?? []).map(serializeEvidence),
+        evidence: (evidenceByReview.get(review.id) ?? []).map((item) => serializeEvidence(item, locale, review)),
       })),
-      reviewEvidence: productEvidence.map(serializeEvidence),
+      reviewEvidence: productEvidence.map((item) => serializeEvidence(item, locale, reviewById.get(item.reviewId))),
     };
   });
 }
 
-export async function getAmazon2023ProductDetails(productIds: string[], datasetSlug?: string) {
+export async function getAmazon2023ProductDetails(productIds: string[], datasetSlug?: string, locale: Amazon2023Locale = "en") {
   const dataset = await getActiveAmazon2023Dataset(datasetSlug);
   if (!dataset) {
     return null;
@@ -1233,7 +1347,7 @@ export async function getAmazon2023ProductDetails(productIds: string[], datasetS
     .from(shoppingProducts)
     .where(and(eq(shoppingProducts.datasetId, dataset.id), inArray(shoppingProducts.id, ids)));
   const order = new Map(ids.map((id, index) => [id, index]));
-  const products = await hydrateAmazon2023Products(rows);
+  const products = await hydrateAmazon2023Products(rows, locale);
 
   return {
     dataset: dataset.slug,
@@ -1241,7 +1355,7 @@ export async function getAmazon2023ProductDetails(productIds: string[], datasetS
   };
 }
 
-export async function getAmazon2023ProductDetail(productIdOrSlug: string, datasetSlug?: string) {
+export async function getAmazon2023ProductDetail(productIdOrSlug: string, datasetSlug?: string, locale: Amazon2023Locale = "en") {
   const dataset = await getActiveAmazon2023Dataset(datasetSlug);
   if (!dataset) {
     return null;
@@ -1265,7 +1379,7 @@ export async function getAmazon2023ProductDetail(productIdOrSlug: string, datase
     return { dataset: dataset.slug, product: null };
   }
 
-  const [hydrated] = await hydrateAmazon2023Products([product]);
+  const [hydrated] = await hydrateAmazon2023Products([product], locale);
   return {
     dataset: dataset.slug,
     product: hydrated ?? null,

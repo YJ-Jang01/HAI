@@ -12,6 +12,7 @@ import {
   runAiQuery,
   compareAiProducts,
   loadAiEvidence,
+  loadAiStressTest,
   refineAiQuery,
   logInteraction,
   mapColorToCss,
@@ -117,6 +118,11 @@ const UI_COPY = {
     removeCompare: "Remove",
     aiCriteriaLens: "AI Criteria Lens",
     parsedCriteria: "Parsed criteria",
+    decompositionQuality: "Filter decomposition",
+    llmSourceGemini: "LLM",
+    llmSourceRule: "Rule fallback",
+    fallbackInUse: "fallback in use",
+    correctionsApplied: (count) => `${count} backend correction${count === 1 ? "" : "s"}`,
     clarification: "Clarify",
     chooseOne: "Choose one",
     openCriteria: "Open",
@@ -125,6 +131,21 @@ const UI_COPY = {
     criteriaRowsHelp: "These buttons show or hide rows in the comparison matrix.",
     criteriaRowEnabled: (label) => `${label} is shown in the comparison matrix`,
     criteriaRowDisabled: (label) => `${label} is hidden from the comparison matrix`,
+    showMoreCriteriaRows: (count) => `Show ${count} more matrix rows`,
+    hideCriteriaRows: "Collapse matrix rows",
+    preferenceStressTest: "Preference Stress-Test",
+    stressHelp: "Adjust preference weights to see how selected or top-ranked items move.",
+    stressUpdating: "Recomputing preference ranking...",
+    stressInsight: "Preference ranking",
+    stressLow: "Low",
+    stressHigh: "High",
+    stressPrice: "Price sensitivity",
+    stressRating: "Rating",
+    stressReviewConfidence: "Review confidence",
+    stressMaterial: "Material",
+    stressComfort: "Comfort",
+    stressDurability: "Durability",
+    stressCareEase: "Easy care",
     estimatedResults: (count) => `${count} results`,
     matrixHint: "Add 2-4 products from the grid to compare them here.",
     matrixUpdating: "Updating comparison...",
@@ -144,6 +165,11 @@ const UI_COPY = {
     nextActionsHelp: "Select 2-4 products to compare, or refine the current lens.",
     compareSelected: "Compare selected",
     sourceSnippets: "Source snippets",
+    supportingEvidence: "Recommendation evidence",
+    skepticalEvidence: "Caution evidence",
+    missingEvidence: "Evidence gaps",
+    missingSupportingEvidence: "No positive review evidence was found for this criterion.",
+    missingSkepticalEvidence: "No cautionary review evidence was found for this criterion.",
     closeSnippets: "Close snippets",
     loadingEvidence: "Loading evidence...",
     noEvidenceInfo: "No review evidence available.",
@@ -309,6 +335,11 @@ const UI_COPY = {
     removeCompare: "제거",
     aiCriteriaLens: "AI 기준 렌즈",
     parsedCriteria: "분해된 조건",
+    decompositionQuality: "필터 분해",
+    llmSourceGemini: "LLM",
+    llmSourceRule: "규칙 fallback",
+    fallbackInUse: "fallback 사용 중",
+    correctionsApplied: (count) => `백엔드 보정 ${count}개`,
     clarification: "조건 조정",
     chooseOne: "선택 필요",
     openCriteria: "열림",
@@ -317,6 +348,21 @@ const UI_COPY = {
     criteriaRowsHelp: "이 버튼은 비교표에 표시할 기준 행을 켜고 끕니다.",
     criteriaRowEnabled: (label) => `${label} 기준이 비교표에 표시됩니다`,
     criteriaRowDisabled: (label) => `${label} 기준이 비교표에서 숨겨집니다`,
+    showMoreCriteriaRows: (count) => `추가 비교 기준 ${count}개 보기`,
+    hideCriteriaRows: "비교 기준 접기",
+    preferenceStressTest: "선호 스트레스 테스트",
+    stressHelp: "선호 가중치를 조절하면 선택 상품 또는 상위 상품의 순위 변화가 계산됩니다.",
+    stressUpdating: "선호 순위를 다시 계산하는 중...",
+    stressInsight: "선호 순위",
+    stressLow: "낮음",
+    stressHigh: "높음",
+    stressPrice: "가격 민감도",
+    stressRating: "평점",
+    stressReviewConfidence: "리뷰 신뢰도",
+    stressMaterial: "소재",
+    stressComfort: "착용감",
+    stressDurability: "내구성",
+    stressCareEase: "관리 편의",
     estimatedResults: (count) => `${count}개 결과`,
     matrixHint: "그리드에서 2~4개 상품을 추가하면 여기서 비교할 수 있습니다.",
     matrixUpdating: "비교표 업데이트 중...",
@@ -336,6 +382,11 @@ const UI_COPY = {
     nextActionsHelp: "비교할 상품 2~4개를 선택하거나 현재 기준을 조정하세요.",
     compareSelected: "선택 상품 비교",
     sourceSnippets: "근거 스니펫",
+    supportingEvidence: "추천 근거",
+    skepticalEvidence: "주의 근거",
+    missingEvidence: "근거 부족",
+    missingSupportingEvidence: "이 기준에 대한 긍정 리뷰 근거가 없습니다.",
+    missingSkepticalEvidence: "이 기준에 대한 주의 리뷰 근거가 없습니다.",
     closeSnippets: "스니펫 닫기",
     loadingEvidence: "근거를 불러오는 중...",
     noEvidenceInfo: "정보 없음",
@@ -483,6 +534,7 @@ const CATALOG_LABELS_KO = {
 };
 
 const DIMENSION_LABELS_KO = {
+  productTaxonomy: "상품 범주",
   productType: "상품 유형",
   category: "카테고리",
   subCategory: "세부 카테고리",
@@ -972,6 +1024,113 @@ function localizeCriterionValue(value, language, copy) {
   return CRITERION_VALUE_LABELS_KO[text] ?? localizeCatalogLabel(text, language);
 }
 
+const AI_CRITERIA_GROUPS = [
+  {
+    key: "productTaxonomy",
+    label: "Product category",
+    keys: ["category", "subCategory", "productType"],
+  },
+];
+
+const AI_CRITERIA_GROUP_BY_KEY = new Map(
+  AI_CRITERIA_GROUPS.flatMap((group) => group.keys.map((key) => [key, group])),
+);
+
+function getAiCriteriaGroup(key) {
+  return AI_CRITERIA_GROUP_BY_KEY.get(key);
+}
+
+function mergedCriterionStatus(criteria) {
+  if (criteria.some((criterion) => criterion.status === "ambiguous")) return "ambiguous";
+  if (criteria.some((criterion) => criterion.status === "draft")) return "draft";
+  return criteria[0]?.status ?? "applied";
+}
+
+function groupAiCriteria(criteria = []) {
+  const grouped = new Map();
+  const result = [];
+  for (const criterion of criteria) {
+    const group = getAiCriteriaGroup(criterion.key);
+    if (!group) {
+      result.push({ type: "criterion", key: `${criterion.key}-${criterion.displayValue}`, criterion, status: criterion.status });
+      continue;
+    }
+
+    let entry = grouped.get(group.key);
+    if (!entry) {
+      entry = {
+        type: "group",
+        key: group.key,
+        label: group.label,
+        keys: group.keys,
+        criteria: [],
+      };
+      grouped.set(group.key, entry);
+      result.push(entry);
+    }
+    entry.criteria.push(criterion);
+  }
+
+  return result.map((item) => (
+    item.type === "group"
+      ? { ...item, status: mergedCriterionStatus(item.criteria) }
+      : item
+  ));
+}
+
+function localizeAiCriteriaGroupLabel(group, language) {
+  if (language !== "ko") return group.label;
+  return DIMENSION_LABELS_KO[group.key] ?? group.label;
+}
+
+function formatGroupedCriterionValue(group, language, copy) {
+  const values = [];
+  const seen = new Set();
+  for (const key of group.keys) {
+    const matchingCriteria = group.criteria.filter((criterion) => criterion.key === key);
+    for (const criterion of matchingCriteria) {
+      const localized = localizeCriterionValue(criterion.displayValue ?? criterion.value, language, copy);
+      const normalized = String(localized ?? "").trim().toLowerCase();
+      if (!normalized || seen.has(normalized)) continue;
+      seen.add(normalized);
+      values.push(localized);
+    }
+  }
+  return values.length ? values.join(" / ") : copy.openCriteria;
+}
+
+function groupAiDimensionControls(dimensions = []) {
+  const grouped = new Map();
+  const result = [];
+  for (const dimension of dimensions) {
+    const group = getAiCriteriaGroup(dimension.key);
+    if (!group) {
+      result.push({ ...dimension, dimensionKeys: [dimension.key], grouped: false });
+      continue;
+    }
+
+    let entry = grouped.get(group.key);
+    if (!entry) {
+      entry = {
+        key: group.key,
+        label: group.label,
+        dimensionKeys: [],
+        grouped: true,
+        active: false,
+      };
+      grouped.set(group.key, entry);
+      result.push(entry);
+    }
+    entry.dimensionKeys.push(dimension.key);
+    entry.active = entry.active || Boolean(dimension.active);
+  }
+  return result;
+}
+
+function isAiDimensionControlRelevant(control, criteriaKeys) {
+  return Boolean(control.active) || (control.dimensionKeys ?? [control.key]).some((key) => DEFAULT_AI_DIMENSIONS.has(key) || criteriaKeys.has(key));
+}
+
 function localizeActionLabel(action, language) {
   if (language !== "ko") return action.label;
   return ACTION_LABELS_KO[action.command] ?? ACTION_LABELS_KO[action.label] ?? action.label;
@@ -1160,8 +1319,13 @@ function uniqueDisplayParts(parts) {
     });
 }
 
+function hasHangulText(value) {
+  return /\p{Script=Hangul}/u.test(String(value ?? ""));
+}
+
 function buildDisplayProductName(product, language, copy) {
   if (language !== "ko") return String(product?.name ?? "");
+  if (hasHangulText(product?.name)) return String(product.name);
 
   const genderValue = getProductSignalValue(product, "genderTarget") || inferGenderFromCategory(product);
   const gender = localizeSignalValue("genderTarget", genderValue, language, copy);
@@ -1186,6 +1350,8 @@ function buildDisplayFeatures(product, language, copy) {
   if (language !== "ko") {
     return (product?.features ?? []).filter(Boolean);
   }
+  const localizedFeatures = (product?.features ?? []).filter((feature) => hasHangulText(feature));
+  if (localizedFeatures.length) return localizedFeatures;
   const name = buildDisplayProductName(product, language, copy);
   const category = safeKoreanText(localizeCatalogLabel(product?.category, language), "");
   const subCategory = inferKoreanProductType(product);
@@ -1211,6 +1377,7 @@ function buildDisplayFeatures(product, language, copy) {
 
 function buildDisplayProductSummary(product, language, copy) {
   if (language !== "ko") return product?.desc || "";
+  if (hasHangulText(product?.desc)) return product.desc;
   const name = buildDisplayProductName(product, language, copy);
   const occasion = localizeSignalValue("occasion", getProductSignalValue(product, "occasion"), language, copy);
   const season = localizeSignalValue("season", getProductSignalValue(product, "season"), language, copy);
@@ -1252,6 +1419,7 @@ function buildReviewDate(review, language) {
 
 function buildReviewTitle(review, index, language) {
   if (language !== "ko") return review?.title || "Customer review";
+  if (hasHangulText(review?.title)) return review.title;
   const evidence = review?.evidence ?? [];
   if (evidence.some((item) => item.sentiment === "negative")) return "주의할 점이 있는 리뷰";
   if (evidence.some((item) => item.sentiment === "positive")) return "만족 의견 리뷰";
@@ -1260,6 +1428,7 @@ function buildReviewTitle(review, index, language) {
 
 function buildReviewComment(review, product, language, copy) {
   if (language !== "ko") return review?.comment ?? "";
+  if (hasHangulText(review?.comment)) return review.comment;
   const evidence = (review?.evidence ?? []).slice(0, 2).map((item) => formatEvidenceText(item, language)).filter(Boolean);
   if (evidence.length) return evidence.join(" ");
   const rating = review?.rating ?? product?.rating ?? 0;
@@ -1288,6 +1457,8 @@ function formatEvidenceText(snippet, language) {
   if (language !== "ko") {
     return snippet.reviewBody || snippet.reviewComment || snippet.evidenceText || snippet.text || "No review text available.";
   }
+  const localizedSnippet = snippet.reviewBody || snippet.reviewComment || snippet.evidenceText || snippet.text;
+  if (hasHangulText(localizedSnippet)) return localizedSnippet;
   const topic = formatEvidenceTopic(snippet, language);
   const sentiment = localizeSentiment(snippet.sentiment ?? "neutral", language);
   const rating = Number.isFinite(Number(snippet.rating)) ? ` 평점 ${Number(snippet.rating)}점.` : "";
@@ -2242,17 +2413,42 @@ function CartSummary({ cart, language, copy, onCart }) {
   );
 }
 
-function CriteriaLensStrip({ aiLens, language, copy, onToggleDimension, onClarifyCriteria, onRestoreHistory }) {
+function CriteriaLensStrip({
+  aiLens,
+  language,
+  copy,
+  stressWeights = DEFAULT_STRESS_WEIGHTS,
+  stressResult,
+  stressUpdating = false,
+  onStressWeightChange,
+  onToggleDimension,
+  onClarifyCriteria,
+  onRestoreHistory,
+}) {
+  const [showAllDimensions, setShowAllDimensions] = useState(false);
+
+  useEffect(() => {
+    setShowAllDimensions(false);
+  }, [aiLens.queryId]);
+
   if (!["planning", "loading", "applied"].includes(aiLens.status)) return null;
   const criteria = aiLens.parsedCriteria ?? [];
   const clarifications = aiLens.clarifications ?? [];
   const criteriaKeys = new Set(criteria.map((criterion) => criterion.key).filter(Boolean));
-  const visibleDimensions = (aiLens.dimensions ?? [])
-    .filter((dimension) => dimension.active || DEFAULT_AI_DIMENSIONS.has(dimension.key) || criteriaKeys.has(dimension.key))
+  const groupedCriteria = groupAiCriteria(criteria);
+  const dimensionControls = groupAiDimensionControls(aiLens.dimensions ?? []);
+  const collapsedDimensions = dimensionControls
+    .filter((dimension) => isAiDimensionControlRelevant(dimension, criteriaKeys))
     .slice(0, MAX_ACTIVE_AI_DIMENSIONS);
-  const hiddenDimensionCount = Math.max(0, (aiLens.dimensions ?? []).length - visibleDimensions.length);
+  const visibleDimensions = showAllDimensions ? dimensionControls : collapsedDimensions;
+  const hiddenDimensionCount = Math.max(0, dimensionControls.length - collapsedDimensions.length);
   const history = aiLens.history ?? [];
   const historyIndex = aiLens.historyIndex ?? history.length - 1;
+  const decomposition = aiLens.decomposition;
+  const decompositionSource = decomposition?.source === "gemini" ? copy.llmSourceGemini : copy.llmSourceRule;
+  const decompositionConfidence = Number.isFinite(decomposition?.confidence) ? Math.round(decomposition.confidence * 100) : null;
+  const correctionCount = decomposition?.corrections?.length ?? 0;
+  const stressTop = stressResult?.items?.[0];
   const warningText = localizeAiMessage(aiLens.interpretation?.warning, language, copy);
   const showWarning = warningText && !String(aiLens.interpretation?.warning ?? "").includes("AI query used the currently selected parsed criteria") && !String(aiLens.interpretation?.warning ?? "").includes("AI output was validated against backend-owned taxonomy");
   return (
@@ -2261,25 +2457,37 @@ function CriteriaLensStrip({ aiLens, language, copy, onToggleDimension, onClarif
         <div>
           <div className="font-bold">{copy.aiCriteriaLens}</div>
           <div className="text-xs text-[#4c1d95]">{copy.parsedCriteria}: {localizeInterpretationSummary(aiLens.interpretation?.summary, language)}</div>
+          {decomposition ? (
+            <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold text-[#6d28d9]">
+              <span>{copy.decompositionQuality}: {decompositionSource}{decompositionConfidence !== null ? ` ${decompositionConfidence}%` : ""}</span>
+              {decomposition.fallbackUsed ? <span>{copy.fallbackInUse}</span> : null}
+              {correctionCount ? <span>{copy.correctionsApplied(correctionCount)}</span> : null}
+            </div>
+          ) : null}
         </div>
         {aiLens.updating ? <span className="text-xs font-semibold text-[#6d28d9]">{copy.matrixUpdating}</span> : null}
       </div>
 
       <div className="mb-3 flex flex-wrap gap-2">
-        {criteria.map((criterion) => (
-          <span
-            key={`${criterion.key}-${criterion.displayValue}`}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-              criterion.status === "ambiguous"
-                ? "border-[#a855f7] bg-white text-[#6d28d9]"
-                : criterion.status === "draft"
-                  ? "border-dashed border-[#c4b5fd] bg-white text-[#6d28d9]"
-                  : "border-[#ddd6fe] bg-[#f5f3ff] text-[#4c1d95]"
-            }`}
-          >
-            {localizeDimensionLabel(criterion, language)}: {localizeCriterionValue(criterion.displayValue, language, copy)}
-          </span>
-        ))}
+        {groupedCriteria.map((item) => {
+          const status = item.status;
+          const label = item.type === "group" ? localizeAiCriteriaGroupLabel(item, language) : localizeDimensionLabel(item.criterion, language);
+          const value = item.type === "group" ? formatGroupedCriterionValue(item, language, copy) : localizeCriterionValue(item.criterion.displayValue, language, copy);
+          return (
+            <span
+              key={item.key}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                status === "ambiguous"
+                  ? "border-[#a855f7] bg-white text-[#6d28d9]"
+                  : status === "draft"
+                    ? "border-dashed border-[#c4b5fd] bg-white text-[#6d28d9]"
+                    : "border-[#ddd6fe] bg-[#f5f3ff] text-[#4c1d95]"
+              }`}
+            >
+              {label}: {value}
+            </span>
+          );
+        })}
       </div>
 
       {clarifications.length ? (
@@ -2338,13 +2546,55 @@ function CriteriaLensStrip({ aiLens, language, copy, onToggleDimension, onClarif
         </div>
       ) : null}
 
+      {aiLens.status === "applied" ? (
+        <div className="mb-3 border-t border-[#ede9fe] pt-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-bold text-[#4c1d95]">{copy.preferenceStressTest}</div>
+              <div className="text-[11px] leading-snug text-[#6d28d9]">
+                {stressUpdating ? copy.stressUpdating : stressResult?.insight ?? copy.stressHelp}
+              </div>
+            </div>
+            {stressTop ? (
+              <span className="rounded-full border border-[#ddd6fe] bg-white px-3 py-1 text-[11px] font-bold text-[#6d28d9]">
+                {copy.stressInsight}: #{stressTop.rank}
+              </span>
+            ) : null}
+          </div>
+          <div className="grid gap-3 min-[760px]:grid-cols-2 min-[1220px]:grid-cols-4">
+            {STRESS_CONTROLS.map((control) => {
+              const value = Number(stressWeights?.[control.key] ?? DEFAULT_STRESS_WEIGHTS[control.key]);
+              return (
+                <label key={control.key} className="grid gap-1 text-[11px] font-semibold text-[#4c1d95]">
+                  <span>{copy[control.copyKey]}</span>
+                  <input
+                    className="h-2 w-full accent-[#7c3aed]"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={value}
+                    onChange={(event) => onStressWeightChange?.(control.key, Number(event.target.value))}
+                  />
+                  <span className="flex justify-between text-[10px] text-[#6d28d9]">
+                    <span>{copy.stressLow}</span>
+                    <span>{Math.round(value * 100)}%</span>
+                    <span>{copy.stressHigh}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-2 border-t border-[#ede9fe] pt-3">
         <div className="min-w-[150px]">
           <span className="block text-xs font-bold text-[#4c1d95]">{copy.criteriaRows}</span>
           <span className="block text-[11px] leading-snug text-[#6d28d9]">{copy.criteriaRowsHelp}</span>
         </div>
         {visibleDimensions.map((dimension) => {
-          const label = localizeDimensionLabel(dimension, language);
+          const label = dimension.grouped ? localizeAiCriteriaGroupLabel(dimension, language) : localizeDimensionLabel(dimension, language);
           return (
             <button
               key={dimension.key}
@@ -2356,13 +2606,22 @@ function CriteriaLensStrip({ aiLens, language, copy, onToggleDimension, onClarif
               type="button"
               aria-pressed={dimension.active ? "true" : "false"}
               title={dimension.active ? copy.criteriaRowEnabled(label) : copy.criteriaRowDisabled(label)}
-              onClick={() => onToggleDimension(dimension.key)}
+              onClick={() => onToggleDimension(dimension.dimensionKeys ?? [dimension.key])}
             >
               {label}
             </button>
           );
         })}
-        {hiddenDimensionCount ? <span className="text-xs font-semibold text-[#6b7280]">+{hiddenDimensionCount}</span> : null}
+        {hiddenDimensionCount ? (
+          <button
+            className="rounded-full border border-[#c4b5fd] bg-white px-3 py-1 text-xs font-bold text-[#6d28d9] transition hover:border-[#7c3aed] hover:bg-[#f5f3ff]"
+            type="button"
+            aria-expanded={showAllDimensions ? "true" : "false"}
+            onClick={() => setShowAllDimensions((current) => !current)}
+          >
+            {showAllDimensions ? copy.hideCriteriaRows : copy.showMoreCriteriaRows(hiddenDimensionCount)}
+          </button>
+        ) : null}
       </div>
       {showWarning ? <div className="mt-2 text-xs text-[#6b21a8]">{warningText}</div> : null}
     </section>
@@ -2405,6 +2664,23 @@ function hasComparisonEvidence(row, key) {
     return Boolean(row.evidenceAvailable[key]);
   }
   return false;
+}
+
+function EvidenceSnippetCard({ item, index, language, copy }) {
+  return (
+    <article key={item.id ?? `${item.reviewId ?? "review"}-${index}`} className="rounded border border-[#ede9fe] bg-white p-3">
+      <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-[#6d28d9]">
+        <span className="rounded-full bg-[#f3e8ff] px-2 py-0.5">{formatEvidenceTitle(item, language, copy)}</span>
+        <span>{formatEvidenceTopic(item, language)}</span>
+        {item.sentiment ? <span className="rounded-full bg-[#f3e8ff] px-2 py-0.5">{localizeSentiment(item.sentiment, language)}</span> : null}
+      </div>
+      {formatEvidenceMeta(item, language) ? <p className="mb-1 text-[11px] font-semibold text-[#6b7280]">{formatEvidenceMeta(item, language)}</p> : null}
+      <p className="text-xs leading-relaxed text-[#111827]">{formatEvidenceText(item, language)}</p>
+      {item.evidenceText && language !== "ko" && item.evidenceText !== item.reviewBody ? (
+        <p className="mt-2 rounded bg-[#f8fafc] px-2 py-1 text-[11px] leading-snug text-[#475569]">{item.evidenceText}</p>
+      ) : null}
+    </article>
+  );
 }
 
 const COMPARISON_DIMENSION_ORDER = [
@@ -2596,6 +2872,7 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
     productName: "",
     dimension: "",
     evidence: [],
+    overlay: null,
   });
   const [sortMode, setSortMode] = useState("original");
   const emptyClassName = embedded ? "bg-white text-sm text-[#565959]" : "rounded border border-[#d8b4fe] bg-white p-4 text-sm text-[#565959]";
@@ -2604,7 +2881,10 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
     () => new Map(selectedProducts.map((product) => [product.id, buildDisplayProductName(product, language, copy)])),
     [copy, language, selectedProducts],
   );
-  const displayRowName = useCallback((row) => productNamesById.get(row.productId) ?? (language === "ko" ? "선택 상품" : row.name), [language, productNamesById]);
+  const displayRowName = useCallback(
+    (row) => productNamesById.get(row.productId) ?? (row?.name || (language === "ko" ? "선택 상품" : "Selected item")),
+    [language, productNamesById],
+  );
 
   useEffect(() => {
     setEvidencePanel({
@@ -2614,6 +2894,7 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
       productName: "",
       dimension: "",
       evidence: [],
+      overlay: null,
     });
   }, [comparison, queryId]);
 
@@ -2626,8 +2907,9 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
       productName: displayRowName(row),
       dimension,
       evidence: [],
+      overlay: null,
     });
-    loadAiEvidence({ queryId, productId: row.productId, dimension })
+    loadAiEvidence({ queryId, productId: row.productId, dimension, locale: language })
       .then((response) => {
         setEvidencePanel({
           loading: false,
@@ -2636,6 +2918,7 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
           productName: displayRowName(row),
           dimension,
           evidence: response.evidence ?? [],
+          overlay: response.overlay ?? null,
         });
         logInteraction("evidence_opened", { queryId, productId: row.productId, dimension });
       })
@@ -2647,9 +2930,10 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
           productName: displayRowName(row),
           dimension,
           evidence: [],
+          overlay: null,
         });
       });
-  }, [copy.evidenceRequestFailed, displayRowName, queryId]);
+  }, [copy.evidenceRequestFailed, displayRowName, language, queryId]);
 
   const rawCellKeys = useMemo(() => Object.keys(comparison?.rows?.[0]?.cells ?? {}), [comparison]);
   const dimensionLabels = comparison?.dimensions ?? rawCellKeys;
@@ -2784,7 +3068,7 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
             <button
               className="rounded border border-[#ddd6fe] bg-white px-2 py-1 text-xs font-bold text-[#6d28d9]"
               type="button"
-              onClick={() => setEvidencePanel({ loading: false, error: "", productId: null, productName: "", dimension: "", evidence: [] })}
+              onClick={() => setEvidencePanel({ loading: false, error: "", productId: null, productName: "", dimension: "", evidence: [], overlay: null })}
             >
               {copy.closeSnippets}
             </button>
@@ -2792,21 +3076,43 @@ function ComparisonMatrix({ comparison, selectedProducts, language, copy, updati
           {evidencePanel.loading ? <p className="text-xs font-semibold text-[#6d28d9]">{copy.loadingEvidence}</p> : null}
           {evidencePanel.error ? <p className="text-xs font-semibold text-[#b12704]">{evidencePanel.error}</p> : null}
           {!evidencePanel.loading && !evidencePanel.error ? (
-            evidencePanel.evidence.length ? (
+            evidencePanel.overlay ? (
+              <div className="grid gap-3">
+                {[
+                  { key: "supporting", title: copy.supportingEvidence, items: evidencePanel.overlay.supporting ?? [] },
+                  { key: "skeptical", title: copy.skepticalEvidence, items: evidencePanel.overlay.skeptical ?? [] },
+                ].map((group) => (
+                  <section key={group.key} className="grid gap-2">
+                    <h5 className="text-xs font-bold text-[#4c1d95]">{group.title}</h5>
+                    {group.items.length ? (
+                      group.items.slice(0, 4).map((item, index) => (
+                        <EvidenceSnippetCard key={item.id ?? `${group.key}-${item.reviewId ?? index}`} item={item} index={index} language={language} copy={copy} />
+                      ))
+                    ) : (
+                      <p className="rounded border border-[#e5e7eb] bg-white px-3 py-2 text-xs text-[#565959]">{copy.noEvidenceInfo}</p>
+                    )}
+                  </section>
+                ))}
+                {evidencePanel.overlay.missing?.length ? (
+                  <section className="grid gap-2">
+                    <h5 className="text-xs font-bold text-[#4c1d95]">{copy.missingEvidence}</h5>
+                    <div className="grid gap-1">
+                      {evidencePanel.overlay.missing.map((item) => {
+                        const text = item.key === "supporting"
+                          ? copy.missingSupportingEvidence
+                          : item.key === "skeptical"
+                            ? copy.missingSkepticalEvidence
+                            : item.label;
+                        return <p key={item.key} className="rounded border border-[#e5e7eb] bg-white px-3 py-2 text-xs text-[#565959]">{text}</p>;
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+              </div>
+            ) : evidencePanel.evidence.length ? (
               <div className="grid gap-2">
                 {evidencePanel.evidence.slice(0, 6).map((item, index) => (
-                  <article key={item.id ?? `${item.reviewId ?? "review"}-${index}`} className="rounded border border-[#ede9fe] bg-white p-3">
-                    <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-[#6d28d9]">
-                      <span className="rounded-full bg-[#f3e8ff] px-2 py-0.5">{formatEvidenceTitle(item, language, copy)}</span>
-                      <span>{formatEvidenceTopic(item, language)}</span>
-                      {item.sentiment ? <span className="rounded-full bg-[#f3e8ff] px-2 py-0.5">{localizeSentiment(item.sentiment, language)}</span> : null}
-                    </div>
-                    {formatEvidenceMeta(item, language) ? <p className="mb-1 text-[11px] font-semibold text-[#6b7280]">{formatEvidenceMeta(item, language)}</p> : null}
-                    <p className="text-xs leading-relaxed text-[#111827]">{formatEvidenceText(item, language)}</p>
-                    {item.evidenceText && language !== "ko" && item.evidenceText !== item.reviewBody ? (
-                      <p className="mt-2 rounded bg-[#f8fafc] px-2 py-1 text-[11px] leading-snug text-[#475569]">{item.evidenceText}</p>
-                    ) : null}
-                  </article>
+                  <EvidenceSnippetCard key={item.id ?? `${item.reviewId ?? "review"}-${index}`} item={item} index={index} language={language} copy={copy} />
                 ))}
               </div>
             ) : (
@@ -2902,6 +3208,9 @@ function ProductListing({
   cart,
   aiLens,
   isUpdating,
+  stressWeights,
+  stressResult,
+  stressUpdating,
   selectedComparisonIds,
   language,
   copy,
@@ -2909,6 +3218,7 @@ function ProductListing({
   onOpenProduct,
   onCart,
   onToggleDimension,
+  onStressWeightChange,
   onClarifyCriteria,
   onRestoreCriteriaHistory,
   onToggleCompareProduct,
@@ -3001,6 +3311,10 @@ function ProductListing({
             aiLens={aiLens}
             language={language}
             copy={copy}
+            stressWeights={stressWeights}
+            stressResult={stressResult}
+            stressUpdating={stressUpdating}
+            onStressWeightChange={onStressWeightChange}
             onToggleDimension={onToggleDimension}
             onClarifyCriteria={onClarifyCriteria}
             onRestoreHistory={onRestoreCriteriaHistory}
@@ -3521,12 +3835,31 @@ function catalogRequestFilters(filters) {
 
 const DEFAULT_AI_DIMENSIONS = new Set(["price", "brand", "rating", "reviewCount", "category", "productType", "material", "fit", "season", "style", "sleeveLength", "reviewStrengths", "reviewRisks"]);
 const MAX_ACTIVE_AI_DIMENSIONS = 14;
+const DEFAULT_STRESS_WEIGHTS = {
+  price: 0.55,
+  rating: 0.5,
+  reviewConfidence: 0.6,
+  material: 0.45,
+  comfort: 0.7,
+  durability: 0.55,
+  careEase: 0.45,
+};
+const STRESS_CONTROLS = [
+  { key: "price", copyKey: "stressPrice" },
+  { key: "rating", copyKey: "stressRating" },
+  { key: "reviewConfidence", copyKey: "stressReviewConfidence" },
+  { key: "material", copyKey: "stressMaterial" },
+  { key: "comfort", copyKey: "stressComfort" },
+  { key: "durability", copyKey: "stressDurability" },
+  { key: "careEase", copyKey: "stressCareEase" },
+];
 
 function createEmptyAiLens(status = "idle") {
   return {
     status,
     queryId: null,
     interpretation: null,
+    decomposition: null,
     parsedCriteria: [],
     clarifications: [],
     dimensions: [],
@@ -3547,6 +3880,7 @@ function createAiLensSnapshot(lens, label, queryId = lens.queryId) {
     label,
     queryId,
     interpretation: lens.interpretation,
+    decomposition: lens.decomposition ?? null,
     parsedCriteria: lens.parsedCriteria ?? [],
     clarifications: lens.clarifications ?? [],
     dimensions: lens.dimensions ?? [],
@@ -3561,6 +3895,7 @@ function applyAiLensSnapshot(current, snapshot, index) {
     status: "applied",
     queryId: snapshot.queryId ?? current.queryId,
     interpretation: snapshot.interpretation ?? current.interpretation,
+    decomposition: snapshot.decomposition ?? current.decomposition ?? null,
     parsedCriteria: snapshot.parsedCriteria ?? [],
     clarifications: snapshot.clarifications ?? [],
     dimensions: snapshot.dimensions ?? current.dimensions,
@@ -3608,6 +3943,8 @@ export default function App() {
     ...createEmptyAiLens(),
   });
   const [selectedComparisonIds, setSelectedComparisonIds] = useState([]);
+  const [stressWeights, setStressWeights] = useState(DEFAULT_STRESS_WEIGHTS);
+  const [stressTest, setStressTest] = useState({ status: "idle", result: null, error: "" });
   const [cart, setCart] = useState([]);
   const [toast, setToast] = useState("");
   const aiRequestVersionRef = useRef(0);
@@ -3623,6 +3960,38 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   }, [language]);
+
+  useEffect(() => {
+    if (!products.length) return;
+    const productsById = new Map(products.map((product) => [product.id, product]));
+    setCart((current) => {
+      let changed = false;
+      const next = current.map((item) => {
+        const freshProduct = productsById.get(item.product?.id);
+        if (!freshProduct || freshProduct === item.product) return item;
+        changed = true;
+        return { ...item, product: { ...item.product, ...freshProduct } };
+      });
+      return changed ? next : current;
+    });
+  }, [products]);
+
+  useEffect(() => {
+    if (!selectedProduct?.id) return;
+    let cancelled = false;
+    loadProductDetail(selectedProduct.id, { locale: language })
+      .then((detail) => {
+        if (cancelled) return;
+        setSelectedProduct(detail);
+        setProducts((current) => mergeProducts(current, [detail]));
+      })
+      .catch((error) => {
+        if (!cancelled) console.error(error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [language, selectedProduct?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -3672,6 +4041,7 @@ export default function App() {
     aiRequestVersionRef.current += 1;
     setAiLens(createEmptyAiLens());
     setSelectedComparisonIds([]);
+    setStressTest({ status: "idle", result: null, error: "" });
   }, []);
 
   const handleHome = useCallback(() => {
@@ -3834,6 +4204,7 @@ export default function App() {
             status: "applied",
             queryId: response.queryId,
             interpretation: response.interpretation,
+            decomposition: response.decomposition ?? null,
             parsedCriteria: response.parsedCriteria ?? [],
             clarifications: response.clarifications ?? [],
             dimensions: normalizeAiDimensions(response.comparisonDimensions ?? [], response.parsedCriteria ?? []),
@@ -3968,12 +4339,24 @@ export default function App() {
     setCart((current) => current.filter((item) => item.key !== key));
   }, []);
 
-  const handleToggleDimension = useCallback((dimensionKey) => {
-    setAiLens((current) => ({
+  const handleToggleDimension = useCallback((dimensionKeyOrKeys) => {
+    const dimensionKeys = Array.isArray(dimensionKeyOrKeys) ? dimensionKeyOrKeys : [dimensionKeyOrKeys];
+    setAiLens((current) => {
+      const keySet = new Set(dimensionKeys);
+      const currentlyActive = current.dimensions.some((dimension) => keySet.has(dimension.key) && dimension.active);
+      return {
+        ...current,
+        dimensions: current.dimensions.map((dimension) => (keySet.has(dimension.key) ? { ...dimension, active: !currentlyActive } : dimension)),
+      };
+    });
+    logInteraction("dimension_toggled", { dimensionKeys });
+  }, []);
+
+  const handleStressWeightChange = useCallback((key, value) => {
+    setStressWeights((current) => ({
       ...current,
-      dimensions: current.dimensions.map((dimension) => (dimension.key === dimensionKey ? { ...dimension, active: !dimension.active } : dimension)),
+      [key]: Number(value),
     }));
-    logInteraction("dimension_toggled", { dimensionKey });
   }, []);
 
   const handleToggleCompareProduct = useCallback((product) => {
@@ -4016,6 +4399,7 @@ export default function App() {
             status: "applied",
             queryId: response.queryId,
             interpretation: response.interpretation,
+            decomposition: response.decomposition ?? current.decomposition ?? null,
             parsedCriteria: response.parsedCriteria ?? current.parsedCriteria,
             clarifications: response.clarifications ?? current.clarifications,
             dimensions: normalizeAiDimensions(response.comparisonDimensions ?? current.dimensions, response.parsedCriteria ?? current.parsedCriteria),
@@ -4069,6 +4453,7 @@ export default function App() {
         ...current,
         status: "applied",
         items: response.items ?? current.items,
+        decomposition: response.decomposition ?? current.decomposition ?? null,
         parsedCriteria: response.parsedCriteria ?? current.parsedCriteria,
         clarifications: response.clarifications ?? current.clarifications,
         dimensions: normalizeAiDimensions(response.comparisonDimensions ?? current.dimensions, response.parsedCriteria ?? current.parsedCriteria),
@@ -4083,6 +4468,41 @@ export default function App() {
       setAiLens((current) => ({ ...current, updating: false, error: error instanceof Error ? error.message : copy.refineRequestFailed }));
     }
   }, [aiLens.dimensions, aiLens.queryId, copy.refineRequestFailed, language, selectedComparisonIds]);
+
+  useEffect(() => {
+    if (aiLens.status !== "applied" || !aiLens.queryId) {
+      setStressTest((current) => (current.status === "idle" && !current.result ? current : { status: "idle", result: null, error: "" }));
+      return undefined;
+    }
+    const productIds = selectedComparisonIds.length >= 2
+      ? selectedComparisonIds.slice(0, 4)
+      : aiLens.items.slice(0, 4).map((product) => product.id).filter(Boolean);
+    if (productIds.length < 2) {
+      setStressTest((current) => (current.status === "idle" && !current.result ? current : { status: "idle", result: null, error: "" }));
+      return undefined;
+    }
+
+    let cancelled = false;
+    setStressTest((current) => ({ status: "loading", result: current.result, error: "" }));
+    loadAiStressTest({
+      queryId: aiLens.queryId,
+      selectedProductIds: productIds,
+      weights: stressWeights,
+      locale: language,
+    })
+      .then((response) => {
+        if (cancelled) return;
+        setStressTest({ status: "ready", result: response.stressTest ?? null, error: "" });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setStressTest({ status: "error", result: null, error: error instanceof Error ? error.message : copy.aiRequestFailed });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [aiLens.items, aiLens.queryId, aiLens.status, copy.aiRequestFailed, language, selectedComparisonIds, stressWeights]);
 
   useEffect(() => {
     if (aiLens.status !== "applied" || !aiLens.queryId || selectedComparisonIds.length < 2) {
@@ -4144,6 +4564,9 @@ export default function App() {
           cart={cart}
           aiLens={aiLens}
           isUpdating={listingUpdating}
+          stressWeights={stressWeights}
+          stressResult={stressTest.result}
+          stressUpdating={stressTest.status === "loading"}
           selectedComparisonIds={selectedComparisonIds}
           language={language}
           copy={copy}
@@ -4151,6 +4574,7 @@ export default function App() {
           onOpenProduct={handleOpenProduct}
           onCart={() => setView("cart")}
           onToggleDimension={handleToggleDimension}
+          onStressWeightChange={handleStressWeightChange}
           onClarifyCriteria={handleClarifyCriteria}
           onRestoreCriteriaHistory={handleRestoreCriteriaHistory}
           onToggleCompareProduct={handleToggleCompareProduct}

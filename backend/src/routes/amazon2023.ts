@@ -11,6 +11,7 @@ import {
   type Amazon2023ProductFilters,
   type Amazon2023Sort,
   type Amazon2023ProductView,
+  type Amazon2023Locale,
 } from "../repositories/amazon2023.js";
 
 export const amazon2023Router = Router();
@@ -24,6 +25,10 @@ function readString(value: unknown) {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readLocale(value: unknown): Amazon2023Locale {
+  return value === "ko" ? "ko" : "en";
 }
 
 function parseOptionalNonNegativeNumber(value: unknown) {
@@ -87,6 +92,7 @@ function parseFilters(query: Record<string, unknown>) {
 
   return {
     datasetSlug: readString(query.dataset),
+    locale: readLocale(query.locale),
     query: readString(query.query),
     category: readString(query.category),
     subCategory: readString(query.subCategory),
@@ -181,7 +187,7 @@ amazon2023Router.post("/products/batch", async (req, res, next) => {
       return sendError(res, 400, "INVALID_REQUEST", "productIds must be an array of 1-20 product ids.");
     }
 
-    const result = await getAmazon2023ProductDetails(productIds, readString(req.body?.dataset));
+    const result = await getAmazon2023ProductDetails(productIds, readString(req.body?.dataset), readLocale(req.body?.locale ?? req.query.locale));
     if (!result) {
       return sendError(res, 404, "DATASET_NOT_FOUND", "Amazon Reviews 2023 dataset has not been imported yet.");
     }
@@ -193,7 +199,7 @@ amazon2023Router.post("/products/batch", async (req, res, next) => {
 
 amazon2023Router.get("/products/:productId", async (req, res, next) => {
   try {
-    const result = await getAmazon2023ProductDetail(req.params.productId, readString(req.query.dataset));
+    const result = await getAmazon2023ProductDetail(req.params.productId, readString(req.query.dataset), readLocale(req.query.locale));
     if (!result) {
       return sendError(res, 404, "DATASET_NOT_FOUND", "Amazon Reviews 2023 dataset has not been imported yet.");
     }

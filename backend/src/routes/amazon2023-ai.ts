@@ -8,6 +8,7 @@ import {
   getAmazon2023ProductDetails,
   searchAmazon2023Products,
   type Amazon2023ProductFilters,
+  type Amazon2023Locale,
 } from "../repositories/amazon2023.js";
 
 const MAX_AI_ITEMS = 36;
@@ -41,6 +42,26 @@ const compareBodySchema = z.object({
   queryId: z.string().min(1),
   selectedProductIds: z.array(z.string().min(1)).min(2).max(MAX_COMPARE_ITEMS),
   activeDimensions: z.array(z.string()).default([]),
+  locale: z.enum(["en", "ko"]).optional(),
+});
+
+const stressWeightsSchema = z
+  .object({
+    price: z.number().min(0).max(1).optional(),
+    rating: z.number().min(0).max(1).optional(),
+    reviewConfidence: z.number().min(0).max(1).optional(),
+    material: z.number().min(0).max(1).optional(),
+    comfort: z.number().min(0).max(1).optional(),
+    durability: z.number().min(0).max(1).optional(),
+    careEase: z.number().min(0).max(1).optional(),
+  })
+  .partial()
+  .default({});
+
+const stressTestBodySchema = z.object({
+  queryId: z.string().min(1),
+  selectedProductIds: z.array(z.string().min(1)).max(MAX_COMPARE_ITEMS).default([]),
+  weights: stressWeightsSchema,
   locale: z.enum(["en", "ko"]).optional(),
 });
 
@@ -81,6 +102,7 @@ type ComparisonDimension = {
 
 type QueryContext = {
   query: string;
+  locale: Amazon2023Locale;
   filters: Amazon2023ProductFilters;
   criteriaFilters?: Amazon2023ProductFilters;
   lensSource?: LensInterpretation["source"];
@@ -90,7 +112,7 @@ type QueryContext = {
   createdAt: number;
 };
 
-type ProductDetailResponse = NonNullable<Awaited<ReturnType<typeof getAmazon2023ProductDetail>>>["product"];
+type ProductDetailResponse = NonNullable<NonNullable<Awaited<ReturnType<typeof getAmazon2023ProductDetail>>>["product"]>;
 type CriteriaOverride = { key: string; value: string | number | boolean | null };
 type ClarificationOption = {
   value: string | number | boolean | null;
@@ -124,13 +146,22 @@ type LlmClarificationHint = {
     criteriaOverrides?: CriteriaOverride[];
   }>;
 };
+type FilterCorrection = {
+  key: string;
+  from: unknown;
+  to: unknown;
+  reason: string;
+};
 type LensInterpretation = {
   filters: Amazon2023ProductFilters;
   criteriaHints: LlmCriterionHint[];
   clarificationHints: LlmClarificationHint[];
   source: "gemini" | "rule";
+  rawFilters?: Record<string, unknown>;
+  corrections?: FilterCorrection[];
   error?: string;
 };
+type ProductSearchItem = NonNullable<Awaited<ReturnType<typeof searchAmazon2023Products>>>["items"][number];
 
 export const amazon2023AiRouter = Router();
 
@@ -154,6 +185,8 @@ const KOREAN_QUERY_ALIASES: Record<string, string> = {
   니트: "knit",
   데님: "denim jeans",
   데일리: "daily casual",
+  일상: "daily casual everyday",
+  일상용: "daily casual everyday",
   드레스: "dress",
   더플: "duffel bag",
   더플백: "duffel bag",
@@ -182,6 +215,7 @@ const KOREAN_QUERY_ALIASES: Record<string, string> = {
   샌들: "sandals shoes",
   선글라스: "sunglasses accessories",
   셔츠: "shirt",
+  손목시계: "watch watches wristwatch",
   수납: "storage pockets capacity",
   숄더백: "shoulder bag",
   스니커즈: "sneakers",
@@ -192,6 +226,8 @@ const KOREAN_QUERY_ALIASES: Record<string, string> = {
   스커트: "skirt bottoms",
   슬랙스: "slacks pants",
   신발: "shoes",
+  시계: "watch watches wristwatch",
+  상의: "top tops shirt tee",
   아우터: "outerwear",
   여성: "women female",
   여성용: "women female",
@@ -206,6 +242,8 @@ const KOREAN_QUERY_ALIASES: Record<string, string> = {
   재킷: "jacket",
   파티: "party event evening",
   파티용: "party event evening",
+  캐주얼: "casual daily everyday",
+  캐쥬얼: "casual daily everyday",
   예쁜: "pretty beautiful",
   예쁘: "pretty beautiful",
   조끼: "vest outerwear",
@@ -299,8 +337,8 @@ const CATEGORY_ALIASES: Record<string, string> = {
   sweaters: "Tops",
   sweatshirt: "Tops",
   sweatshirts: "Tops",
-  tee: "Shirts",
-  tees: "Shirts",
+  tee: "Tops",
+  tees: "Tops",
   top: "Tops",
   tops: "Tops",
   tote: "Bags",
@@ -315,6 +353,10 @@ const CATEGORY_ALIASES: Record<string, string> = {
 
 function createQueryId() {
   return `amazon2023_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function readLocale(value: unknown): Amazon2023Locale {
+  return value === "ko" ? "ko" : "en";
 }
 
 function normalizeText(value: string) {
@@ -332,14 +374,14 @@ function queryIncludesAlias(query: string, term: string) {
   return new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(term)}(?![\\p{L}\\p{N}])`, "u").test(query);
 }
 
-function translateKoreanTerms(query: string) {
-  let translated = query;
+function expandKoreanQueryTerms(query: string) {
+  let expanded = query;
   for (const [term, replacement] of Object.entries(KOREAN_QUERY_ALIASES)) {
     if (queryIncludesAlias(query, term)) {
-      translated += ` ${replacement}`;
+      expanded += ` ${replacement}`;
     }
   }
-  return translated;
+  return expanded;
 }
 
 function parsePriceLimit(query: string) {
@@ -390,7 +432,7 @@ function parseRatingMin(query: string) {
 }
 
 function parseCategory(query: string) {
-  const normalized = normalizeText(translateKoreanTerms(query));
+  const normalized = normalizeText(expandKoreanQueryTerms(query));
   for (const [alias, category] of Object.entries(CATEGORY_ALIASES)) {
     if (normalized.split(" ").includes(alias)) {
       return category;
@@ -400,7 +442,7 @@ function parseCategory(query: string) {
 }
 
 function parseProductType(query: string) {
-  const text = normalizeText(`${query} ${translateKoreanTerms(query)}`);
+  const text = normalizeText(`${query} ${expandKoreanQueryTerms(query)}`);
   const rules: Array<[string, RegExp]> = [
     ["Backpacks", /\b(backpacks?|daypacks?)\b|백팩/i],
     ["Crossbody Bags", /\bcrossbody\b|크로스백/i],
@@ -427,16 +469,17 @@ function parseProductType(query: string) {
     ["Shorts", /\bshorts\b|반바지/i],
     ["Skirts", /\bskirts?\b|스커트/i],
     ["Dresses", /\bdresses?\b|드레스|원피스/i],
+    ["Watches", /\b(watches?|wristwatches?|timepieces?|chronographs?)\b|시계|손목시계/i],
   ];
   return rules.find(([, pattern]) => pattern.test(text))?.[0];
 }
 
 function hasIntent(query: string, pattern: RegExp) {
-  return pattern.test(`${query} ${translateKoreanTerms(query)}`);
+  return pattern.test(`${query} ${expandKoreanQueryTerms(query)}`);
 }
 
 function parseGenderTarget(query: string) {
-  const text = normalizeText(`${query} ${translateKoreanTerms(query)}`);
+  const text = normalizeText(`${query} ${expandKoreanQueryTerms(query)}`);
   if (/\b(girls?|girl's)\b|여아|여자아이/i.test(text)) return "girls";
   if (/\b(boys?|boy's)\b|남아|남자아이/i.test(text)) return "boys";
   if (/\b(baby|infant|toddler)\b|아기|유아/i.test(text)) return "baby";
@@ -454,7 +497,7 @@ function parseSeason(query: string) {
 }
 
 function parseMaterial(query: string) {
-  const text = normalizeText(`${query} ${translateKoreanTerms(query)}`);
+  const text = normalizeText(`${query} ${expandKoreanQueryTerms(query)}`);
   const materials: Array<[string, RegExp]> = [
     ["cotton", /\b(cotton|면)\b/i],
     ["wool", /\b(wool|울|cashmere|merino)\b/i],
@@ -469,7 +512,7 @@ function parseMaterial(query: string) {
 }
 
 function parseClearOccasion(query: string) {
-  const text = normalizeText(`${query} ${translateKoreanTerms(query)}`);
+  const text = normalizeText(`${query} ${expandKoreanQueryTerms(query)}`);
   if (/\b(school|student|campus)\b|통학|학교/i.test(text)) return "school";
   if (/\b(travel|airport|trip|weekend|vacation|resort|beach)\b|여행|피서|휴가|바캉스|리조트|해변/i.test(text)) return "travel";
   if (/\b(interview)\b|면접/i.test(text)) return "office";
@@ -482,7 +525,7 @@ function parseClearOccasion(query: string) {
 }
 
 function parseStyle(query: string) {
-  const text = normalizeText(`${query} ${translateKoreanTerms(query)}`);
+  const text = normalizeText(`${query} ${expandKoreanQueryTerms(query)}`);
   if (/\b(sporty|athletic|running|active)\b|운동|스포티/i.test(text)) return "sporty";
   if (/\b(formal|dressy|business)\b|포멀|격식|면접/i.test(text)) return "formal";
   if (/\b(outdoor|hiking|trail)\b|아웃도어|야외/i.test(text)) return "outdoor";
@@ -550,6 +593,7 @@ const llmInterpretationSchema = z.object({
     .object({
       category: z.string().optional().nullable(),
       subCategory: z.string().optional().nullable(),
+      productType: z.string().optional().nullable(),
       priceMax: z.number().optional().nullable(),
       ratingMin: z.number().optional().nullable(),
       brand: z.string().optional().nullable(),
@@ -631,8 +675,8 @@ function buildGeminiPrompt(query: string) {
     "}",
     "",
     "Allowed filters:",
-    "category: Accessories, Bags, Backpacks, Belts, Boots, Coats, Dresses, Jackets, Pants, Sandals, Shirts, Shoes, Sneakers, Tops",
-    "subCategory/product type: Backpacks, Boots, Coats, Jackets, Loafers, Heels, Flats, Oxfords, Sandals, Shirts, Tees, Sneakers, Blouses, Dresses, Pants",
+    "category: Accessories, Bags, Backpacks, Belts, Boots, Coats, Dresses, Jackets, Pants, Sandals, Shirts, Shoes, Sneakers, Tops, Watches",
+    "subCategory/product type: Backpacks, Boots, Coats, Jackets, Loafers, Heels, Flats, Oxfords, Sandals, Shirts, Tees, Sneakers, Blouses, Dresses, Pants, Watches",
     "genderTarget: men, women, boys, girls, unisex, baby",
     "occasion: commute, school, daily, office, travel, outdoor, formal",
     "season: winter, summer, all_season",
@@ -647,7 +691,7 @@ function buildGeminiPrompt(query: string) {
     "- Translate Korean product terms into English searchText.",
     "- Preserve concrete product modifiers. Example: 반팔 셔츠 must become short sleeve shirt, not only shirt.",
     "- Use filters for clear criteria. Example: 여름 => season summer, 반팔 => sleeveLength short_sleeve.",
-    "- Use subCategory for concrete product types. Example: 코트/coat => subCategory Coats; 부츠/boots => category Shoes and subCategory Boots.",
+    "- Use subCategory for concrete product types. Example: 코트/coat => subCategory Coats; 부츠/boots => category Shoes and subCategory Boots; 시계/watch => category Watches and subCategory Watches.",
     "- Do not broaden coat to jackets. Jacket expansion must be represented as a clarification/relaxation option, not applied silently.",
     "- 피서용/vacation/resort/beach means summer + travel/resort use. Do not add winter, warmth, or insulated filters for it.",
     "- 파티용/party/evening is ambiguous. Do not force it to formal unless the query explicitly says formal/격식. Add partyIntent clarification options instead.",
@@ -778,7 +822,7 @@ function buildFilters(query: string, overrides: { key: string; value: string | n
   const priceMax = parsePriceLimit(query);
   const ratingMin = parseRatingMin(query);
   const category = parseCategory(query);
-  const searchText = translateKoreanTerms(query);
+  const searchText = expandKoreanQueryTerms(query);
   const genderTarget = parseGenderTarget(query);
   const season = parseSeason(query);
   const material = parseMaterial(query);
@@ -844,6 +888,20 @@ function validateFiltersForQuery(filters: Amazon2023ProductFilters, query: strin
   if (filters.subCategory && ["Boots", "Sneakers", "Sandals", "Loafers", "Heels", "Flats", "Oxfords", "Slippers"].includes(filters.subCategory)) {
     filters.category = "Shoes";
   }
+
+  if (filters.subCategory && ["Tees", "Blouses", "Sweaters", "Hoodies"].includes(filters.subCategory)) {
+    filters.category = "Tops";
+  }
+
+  if (filters.subCategory && ["Watch", "Watches", "watch", "watches"].includes(filters.subCategory)) {
+    filters.category = "Watches";
+    filters.subCategory = "Watches";
+  }
+
+  if (filters.category && ["Watch", "Watches", "watch", "watches"].includes(filters.category)) {
+    filters.category = "Watches";
+    filters.subCategory = filters.subCategory ?? "Watches";
+  }
 }
 
 function assignDefined<T extends Record<string, unknown>>(target: T, values: Record<string, unknown>) {
@@ -852,6 +910,22 @@ function assignDefined<T extends Record<string, unknown>>(target: T, values: Rec
       target[key as keyof T] = value as T[keyof T];
     }
   }
+}
+
+function normalizeLlmFilters(filters: Record<string, unknown>): { filters: Record<string, unknown>; corrections: FilterCorrection[] } {
+  const normalized = { ...filters };
+  const corrections: FilterCorrection[] = [];
+  if (!normalized.subCategory && typeof normalized.productType === "string") {
+    normalized.subCategory = normalized.productType;
+    corrections.push({
+      key: "subCategory",
+      from: null,
+      to: normalized.productType,
+      reason: "Mapped LLM productType to the executable subCategory filter.",
+    });
+  }
+  delete normalized.productType;
+  return { filters: normalized, corrections };
 }
 
 function mergeParsedCriteria(base: ParsedCriterion[], hints: LlmCriterionHint[], source: string) {
@@ -878,8 +952,9 @@ async function buildLensInterpretation(query: string, overrides: CriteriaOverrid
   try {
     const llm = await callGeminiInterpretation(query);
     if (llm) {
+      const normalizedLlm = normalizeLlmFilters(llm.filters);
       if (llm.searchText) filters.query = llm.searchText;
-      assignDefined(filters as unknown as Record<string, unknown>, llm.filters);
+      assignDefined(filters as unknown as Record<string, unknown>, normalizedLlm.filters);
       for (const override of overrides) {
         applyCriteriaOverride(filters, override);
       }
@@ -892,6 +967,8 @@ async function buildLensInterpretation(query: string, overrides: CriteriaOverrid
           .map((criterion) => ({ ...criterion, source: "gemini_natural_language" })),
         clarificationHints: llm.clarifications,
         source: "gemini",
+        rawFilters: llm.filters,
+        corrections: normalizedLlm.corrections,
       };
     }
   } catch (error) {
@@ -904,6 +981,7 @@ async function buildLensInterpretation(query: string, overrides: CriteriaOverrid
       criteriaHints: [],
       clarificationHints: [],
       source: "rule",
+      corrections: [],
       error: error instanceof Error ? error.message : String(error),
     };
   }
@@ -917,6 +995,7 @@ async function buildLensInterpretation(query: string, overrides: CriteriaOverrid
     criteriaHints: [],
     clarificationHints: [],
     source: "rule",
+    corrections: [],
   };
 }
 
@@ -931,6 +1010,7 @@ function buildContextOverrideLens(query: string, baseFilters: Amazon2023ProductF
     criteriaHints: [],
     clarificationHints: [],
     source,
+    corrections: [],
   };
 }
 
@@ -956,12 +1036,12 @@ function loosenOccasion(filters: Amazon2023ProductFilters): Amazon2023ProductFil
   };
 }
 
-async function executeAmazon2023AiSearch(filters: Amazon2023ProductFilters, limit = MAX_AI_ITEMS) {
-  let result = await searchAmazon2023Products({ ...filters, limit, offset: 0, sort: "rating_desc" });
+async function executeAmazon2023AiSearch(filters: Amazon2023ProductFilters, limit = MAX_AI_ITEMS, locale: Amazon2023Locale = "en") {
+  let result = await searchAmazon2023Products({ ...filters, locale, limit, offset: 0, sort: "rating_desc" });
   let resolvedFilters = filters;
   if (result && result.pagination.total === 0 && filters.occasion) {
     const relaxedFilters = loosenOccasion(filters);
-    const relaxedResult = await searchAmazon2023Products({ ...relaxedFilters, limit, offset: 0, sort: "rating_desc" });
+    const relaxedResult = await searchAmazon2023Products({ ...relaxedFilters, locale, limit, offset: 0, sort: "rating_desc" });
     if (relaxedResult && relaxedResult.pagination.total > result.pagination.total) {
       resolvedFilters = relaxedFilters;
       result = relaxedResult;
@@ -969,7 +1049,7 @@ async function executeAmazon2023AiSearch(filters: Amazon2023ProductFilters, limi
   }
   if (result && result.pagination.total < MIN_STRUCTURED_RESULT_TARGET && filters.query) {
     const relaxedFilters = loosenFreeText(resolvedFilters);
-    const relaxedResult = await searchAmazon2023Products({ ...relaxedFilters, limit, offset: 0, sort: "rating_desc" });
+    const relaxedResult = await searchAmazon2023Products({ ...relaxedFilters, locale, limit, offset: 0, sort: "rating_desc" });
     if (relaxedResult && relaxedResult.pagination.total > result.pagination.total) {
       resolvedFilters = relaxedFilters;
       result = relaxedResult;
@@ -977,13 +1057,91 @@ async function executeAmazon2023AiSearch(filters: Amazon2023ProductFilters, limi
   }
   if (result && result.pagination.total === 0 && resolvedFilters.category) {
     const relaxedFilters = loosenCategory(resolvedFilters);
-    const relaxedResult = await searchAmazon2023Products({ ...relaxedFilters, limit, offset: 0, sort: "rating_desc" });
+    const relaxedResult = await searchAmazon2023Products({ ...relaxedFilters, locale, limit, offset: 0, sort: "rating_desc" });
     if (relaxedResult && relaxedResult.pagination.total > result.pagination.total) {
       resolvedFilters = relaxedFilters;
       result = relaxedResult;
     }
   }
   return { result, resolvedFilters };
+}
+
+function compactFilters(filters: Amazon2023ProductFilters) {
+  return Object.fromEntries(
+    Object.entries(filters).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+  );
+}
+
+function buildDecompositionDiagnostics(lens: LensInterpretation, filters: Amazon2023ProductFilters, candidateCount?: number) {
+  const validatedFilters = compactFilters(filters);
+  const appliedFilterCount = Object.keys(validatedFilters).length;
+  const correctionCount = lens.corrections?.length ?? 0;
+  const confidenceBase = lens.source === "gemini" ? 0.76 : 0.5;
+  const confidence = Math.max(
+    0.1,
+    Math.min(0.95, confidenceBase + Math.min(appliedFilterCount, 6) * 0.03 - correctionCount * 0.04),
+  );
+  return {
+    source: lens.source,
+    fallbackUsed: lens.source !== "gemini",
+    confidence,
+    rawFilters: lens.rawFilters ?? null,
+    validatedFilters,
+    corrections: lens.corrections ?? [],
+    candidateCount: candidateCount ?? null,
+  };
+}
+
+function shouldDiversifyUngenderedResults(filters: Amazon2023ProductFilters, query: string) {
+  if (filters.genderTarget) return false;
+  const text = `${query} ${filters.query ?? ""} ${filters.category ?? ""} ${filters.subCategory ?? ""}`.toLowerCase();
+  return /\b(tops?|shirts?|tees?|t[- ]?shirts?)\b|상의|티셔츠|반팔티|셔츠|블라우스/i.test(text);
+}
+
+function resultGenderBucket(item: ProductSearchItem) {
+  const record = item as ProductSearchItem & Record<string, unknown>;
+  const semantic = semanticAttribute(record, "genderTarget");
+  const semanticValue = String(semantic?.valueText ?? semantic?.value ?? "").toLowerCase();
+  const categoryPath = Array.isArray(record.categoryPath) ? record.categoryPath.join(" ") : "";
+  const text = [
+    semanticValue,
+    record.category,
+    record.mainCategory,
+    record.subCategory,
+    categoryPath,
+  ]
+    .filter((value) => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+  if (/\bwomen|woman|female|ladies\b/.test(text)) return "women";
+  if (/\bmen|mens|male\b/.test(text)) return "men";
+  if (/\bunisex\b/.test(text)) return "unisex";
+  if (/\bgirls?\b/.test(text)) return "girls";
+  if (/\bboys?\b/.test(text)) return "boys";
+  if (/\bbaby|infant|toddler\b/.test(text)) return "baby";
+  return "other";
+}
+
+function diversifyUngenderedResults<T extends ProductSearchItem>(items: T[]) {
+  const order = ["women", "men", "unisex", "girls", "boys", "baby", "other"];
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = resultGenderBucket(item);
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+  const diversified: T[] = [];
+  let added = true;
+  while (added && diversified.length < items.length) {
+    added = false;
+    for (const key of order) {
+      const group = groups.get(key);
+      if (group?.length) {
+        diversified.push(group.shift() as T);
+        added = true;
+      }
+    }
+  }
+  return diversified;
 }
 
 function criterion(key: string, label: string, value: string | number | boolean | null, source: string, status?: ParsedCriterion["status"]): ParsedCriterion {
@@ -1487,6 +1645,23 @@ function reviewEvidence(product: ProductDetailResponse, mode: "strength" | "risk
     .slice(0, 12);
 }
 
+function buildEvidenceOverlay(product: ProductDetailResponse, dimension?: string) {
+  const supporting = reviewEvidence(product, "strength", dimension).slice(0, 6);
+  const skeptical = reviewEvidence(product, "risk", dimension).slice(0, 6);
+  const missing: Array<{ key: string; label: string }> = [];
+  if (!supporting.length) {
+    missing.push({ key: "supporting", label: "No positive review evidence was found for this criterion." });
+  }
+  if (!skeptical.length) {
+    missing.push({ key: "skeptical", label: "No cautionary review evidence was found for this criterion." });
+  }
+  return {
+    supporting,
+    skeptical,
+    missing,
+  };
+}
+
 function semanticAttributes(product: unknown) {
   return Array.isArray((product as { semanticAttributes?: unknown[] } | null)?.semanticAttributes)
     ? ((product as { semanticAttributes?: Array<Record<string, unknown>> }).semanticAttributes ?? [])
@@ -1506,7 +1681,7 @@ function semanticDisplayValue(attribute: Record<string, unknown> | undefined) {
   return `${value}${suffix}`;
 }
 
-function attachDecisionEvidence(item: Awaited<ReturnType<typeof searchAmazon2023Products>> extends infer T ? T extends { items: Array<infer I> } ? I : never : never) {
+function attachDecisionEvidence(item: ProductSearchItem) {
   const semanticRows = semanticAttributes(item);
   const semanticReasons = semanticRows
     .filter((attribute) => ["genderTarget", "occasion", "season", "material", "style", "warmthLevel", "comfortLevel", "waterproof"].includes(String(attribute.key)))
@@ -1536,8 +1711,28 @@ function attachDecisionEvidence(item: Awaited<ReturnType<typeof searchAmazon2023
   };
 }
 
+function displayReviewEvidenceText(item: Record<string, unknown> | undefined) {
+  if (!item) return undefined;
+  const reviewBody = typeof item.reviewBody === "string" ? item.reviewBody.trim() : "";
+  if (/\p{Script=Hangul}/u.test(reviewBody)) {
+    const reviewTitle = typeof item.reviewTitle === "string" && /\p{Script=Hangul}/u.test(item.reviewTitle) ? item.reviewTitle.trim() : "";
+    return [reviewTitle, reviewBody].filter(Boolean).join(" - ");
+  }
+  const text = typeof item.text === "string" ? item.text.trim() : "";
+  if (text) return text;
+  const evidenceText = typeof item.evidenceText === "string" ? item.evidenceText.trim() : "";
+  return evidenceText || undefined;
+}
+
+function reviewEvidenceMatches(item: Record<string, unknown>, pattern: RegExp) {
+  return [item.text, item.evidenceText, item.reviewTitle, item.reviewBody, item.reviewComment]
+    .filter((value): value is string => typeof value === "string")
+    .some((value) => pattern.test(value));
+}
+
 function reviewSignalValue(product: ProductDetailResponse, pattern: RegExp, fallback: string) {
-  return reviewEvidence(product, "all").find((item) => pattern.test(item.text))?.text ?? fallback;
+  const item = reviewEvidence(product, "all").find((row) => reviewEvidenceMatches(row, pattern));
+  return displayReviewEvidenceText(item) ?? fallback;
 }
 
 function detailTaxonomyText(product: ProductDetailResponse) {
@@ -1575,9 +1770,9 @@ function comparisonValue(product: ProductDetailResponse, dimension: string) {
   if (dimension === "subCategory") return product.categoryPath?.[product.categoryPath.length - 1] ?? product.mainCategory ?? "N/A";
   const semantic = semanticDisplayValue(semanticAttribute(product, dimension));
   if (semantic) return semantic;
-  if (dimension === "fit") return reviewEvidence(product, "all").find((item) => /fit|size|small|large|tight|true to size/i.test(item.text))?.text ?? "No fit review preview";
-  if (dimension === "reviewStrengths") return reviewEvidence(product, "strength")[0]?.text ?? "No positive review preview";
-  if (dimension === "reviewRisks") return reviewEvidence(product, "risk")[0]?.text ?? "No repeated risk preview";
+  if (dimension === "fit") return displayReviewEvidenceText(reviewEvidence(product, "all").find((item) => reviewEvidenceMatches(item, /fit|size|small|large|tight|true to size|맞|작|크|타이트|헐거/i))) ?? "No fit review preview";
+  if (dimension === "reviewStrengths") return displayReviewEvidenceText(reviewEvidence(product, "strength")[0]) ?? "No positive review preview";
+  if (dimension === "reviewRisks") return displayReviewEvidenceText(reviewEvidence(product, "risk")[0]) ?? "No repeated risk preview";
   const lookup = DIMENSION_LOOKUPS[dimension];
   if (lookup) {
     const structuredValue = attributeValue(product, lookup.keys);
@@ -1602,6 +1797,142 @@ function comparisonEvidenceAvailable(product: ProductDetailResponse, dimension: 
   return reviewEvidence(product, comparisonEvidenceMode(dimension), dimension).length > 0;
 }
 
+const DEFAULT_STRESS_WEIGHTS = {
+  price: 0.55,
+  rating: 0.5,
+  reviewConfidence: 0.6,
+  material: 0.45,
+  comfort: 0.7,
+  durability: 0.55,
+  careEase: 0.45,
+};
+
+type StressWeightKey = keyof typeof DEFAULT_STRESS_WEIGHTS;
+
+const STRESS_METRIC_KEYS = Object.keys(DEFAULT_STRESS_WEIGHTS) as StressWeightKey[];
+
+function clamp01(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function numericValue(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string") {
+    const match = value.replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+    if (match) {
+      const parsed = Number(match[0]);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    }
+  }
+  return undefined;
+}
+
+function productPriceNumber(product: ProductDetailResponse) {
+  return numericValue(product.price) ?? numericValue((product as ProductDetailResponse & { priceNumber?: unknown }).priceNumber);
+}
+
+function productReviewCount(product: ProductDetailResponse) {
+  return numericValue(product.reviewCount) ?? numericValue((product as ProductDetailResponse & { reviewCountNumber?: unknown }).reviewCountNumber) ?? 0;
+}
+
+function semanticNumberScore(product: ProductDetailResponse, key: string) {
+  const attribute = semanticAttribute(product, key);
+  const raw = numericValue(attribute?.valueNumber ?? attribute?.valueText ?? attribute?.value);
+  if (raw !== undefined) return clamp01(raw / 5);
+  return reviewEvidence(product, "strength", key).length ? 0.65 : 0.35;
+}
+
+function materialScore(product: ProductDetailResponse) {
+  const attribute = semanticAttribute(product, "material");
+  const value = attribute?.valueText ?? attribute?.value;
+  if (value) {
+    const confidence = numericValue(attribute?.confidence) ?? 0.6;
+    return clamp01(0.55 + confidence * 0.35);
+  }
+  return attributeValue(product, ["Material", "Fabric Type"]) ? 0.6 : 0.25;
+}
+
+function stressMetricScore(product: ProductDetailResponse, key: StressWeightKey, products: ProductDetailResponse[]) {
+  if (key === "price") {
+    const prices = products.map(productPriceNumber).filter((value): value is number => value !== undefined);
+    const price = productPriceNumber(product);
+    if (price === undefined || prices.length < 2) return 0.5;
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    if (max === min) return 0.75;
+    return clamp01(1 - (price - min) / (max - min));
+  }
+  if (key === "rating") {
+    const rating = numericValue(product.rating);
+    return rating === undefined ? 0.35 : clamp01(rating / 5);
+  }
+  if (key === "reviewConfidence") {
+    const counts = products.map(productReviewCount);
+    const max = Math.max(1, ...counts);
+    return clamp01(Math.log1p(productReviewCount(product)) / Math.log1p(max));
+  }
+  if (key === "material") return materialScore(product);
+  if (key === "comfort") return semanticNumberScore(product, "comfortLevel");
+  if (key === "durability") return semanticNumberScore(product, "durabilityLevel");
+  if (key === "careEase") return semanticNumberScore(product, "careEaseLevel");
+  return 0.5;
+}
+
+function normalizeStressWeights(weights: Partial<Record<StressWeightKey, number>>) {
+  return Object.fromEntries(
+    STRESS_METRIC_KEYS.map((key) => [key, clamp01(Number(weights[key] ?? DEFAULT_STRESS_WEIGHTS[key]))]),
+  ) as Record<StressWeightKey, number>;
+}
+
+function scoreStressProducts(products: ProductDetailResponse[], weights: Record<StressWeightKey, number>) {
+  const totalWeight = STRESS_METRIC_KEYS.reduce((sum, key) => sum + weights[key], 0) || 1;
+  return products
+    .map((product) => {
+      const metricScores = Object.fromEntries(
+        STRESS_METRIC_KEYS.map((key) => [key, stressMetricScore(product, key, products)]),
+      ) as Record<StressWeightKey, number>;
+      const score = STRESS_METRIC_KEYS.reduce((sum, key) => sum + metricScores[key] * weights[key], 0) / totalWeight;
+      const drivers = STRESS_METRIC_KEYS
+        .map((key) => ({ key, contribution: metricScores[key] * weights[key], score: metricScores[key] }))
+        .sort((a, b) => b.contribution - a.contribution)
+        .slice(0, 3);
+      return {
+        productId: product.id,
+        name: product.name,
+        score,
+        metricScores,
+        drivers,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+function buildStressTest(products: ProductDetailResponse[], weights: Partial<Record<StressWeightKey, number>>) {
+  const normalizedWeights = normalizeStressWeights(weights);
+  const baselineWeights = normalizeStressWeights(DEFAULT_STRESS_WEIGHTS);
+  const baseline = scoreStressProducts(products, baselineWeights).map((item, index) => ({ ...item, rank: index + 1 }));
+  const baselineRankById = new Map(baseline.map((item) => [item.productId, item.rank]));
+  const items = scoreStressProducts(products, normalizedWeights).map((item, index) => {
+    const rank = index + 1;
+    const baselineRank = baselineRankById.get(item.productId) ?? rank;
+    return {
+      ...item,
+      rank,
+      baselineRank,
+      rankDelta: baselineRank - rank,
+    };
+  });
+  const top = items[0];
+  return {
+    weights: normalizedWeights,
+    baseline,
+    items,
+    insight: top
+      ? `${top.name} ranks #${top.rank} under the current preference weights.`
+      : "Select products to test preference sensitivity.",
+  };
+}
+
 function storeContext(queryId: string, context: QueryContext) {
   queryContexts.set(queryId, context);
   for (const [key, value] of queryContexts) {
@@ -1618,6 +1949,7 @@ amazon2023AiRouter.post("/interpret", async (req, res, next) => {
       return sendError(res, 400, "INVALID_REQUEST", "query must use the documented AI query shape.");
     }
     const lens = await buildLensInterpretation(parsed.data.query, parsed.data.criteriaOverrides);
+    const locale = readLocale(parsed.data.session.locale);
     const filters = lens.filters;
     const facets = await getAmazon2023Facets(filters);
     if (!facets) {
@@ -1643,6 +1975,7 @@ amazon2023AiRouter.post("/interpret", async (req, res, next) => {
     }
     storeContext(queryId, {
       query: parsed.data.query,
+      locale,
       filters,
       criteriaFilters: filters,
       lensSource: lens.source,
@@ -1660,6 +1993,7 @@ amazon2023AiRouter.post("/interpret", async (req, res, next) => {
           ? "Gemini decomposed the natural-language query; backend validated the criteria against dataset-backed filters."
           : "Rule fallback decomposed the query because Gemini was unavailable; backend still validated criteria against dataset-backed filters.",
       },
+      decomposition: buildDecompositionDiagnostics(lens, filters, facets.total),
       parsedCriteria,
       clarifications,
       comparisonDimensions: dimensions,
@@ -1679,13 +2013,14 @@ amazon2023AiRouter.post("/query", async (req, res, next) => {
     }
     const previous = parsed.data.queryId ? queryContexts.get(parsed.data.queryId) : undefined;
     const queryText = previous?.query ?? parsed.data.query;
+    const locale = readLocale(parsed.data.session.locale ?? previous?.locale);
     const lens =
       previous && parsed.data.criteriaOverrides.length
         ? buildContextOverrideLens(queryText, previous.criteriaFilters ?? previous.filters, parsed.data.criteriaOverrides, previous.lensSource ?? "rule")
         : await buildLensInterpretation(queryText, parsed.data.criteriaOverrides);
     const filters = lens.filters;
     const criteriaFilters = { ...filters };
-    const { result, resolvedFilters } = await executeAmazon2023AiSearch(filters);
+    const { result, resolvedFilters } = await executeAmazon2023AiSearch(filters, MAX_AI_ITEMS, locale);
     if (!result) {
       return sendError(res, 404, "DATASET_NOT_FOUND", "Amazon Reviews 2023 dataset has not been imported yet.");
     }
@@ -1693,9 +2028,13 @@ amazon2023AiRouter.post("/query", async (req, res, next) => {
     const dimensions = previous?.dimensions ?? buildDimensions();
     const parsedCriteria = mergeParsedCriteria(buildParsedCriteria(criteriaFilters, queryText), lens.criteriaHints, lens.source === "gemini" ? "gemini_natural_language" : "rule_natural_language");
     const clarifications = await buildClarifications(queryText, criteriaFilters, lens.clarificationHints);
-    const items = result.items.map(attachDecisionEvidence);
+    let items = result.items.map(attachDecisionEvidence);
+    if (shouldDiversifyUngenderedResults(criteriaFilters, queryText)) {
+      items = diversifyUngenderedResults(items);
+    }
     storeContext(queryId, {
       query: queryText,
+      locale,
       filters: resolvedFilters,
       criteriaFilters,
       lensSource: lens.source,
@@ -1713,6 +2052,7 @@ amazon2023AiRouter.post("/query", async (req, res, next) => {
           ? "Gemini decomposed the natural-language query; backend executed only dataset-backed filters."
           : "Rule fallback decomposed the query because Gemini was unavailable; backend executed only dataset-backed filters.",
       },
+      decomposition: buildDecompositionDiagnostics(lens, criteriaFilters, result.pagination.total),
       parsedCriteria,
       clarifications,
       comparisonDimensions: dimensions,
@@ -1727,7 +2067,9 @@ amazon2023AiRouter.post("/query", async (req, res, next) => {
 
 amazon2023AiRouter.get("/query/:queryId/items/:productId/evidence", async (req, res, next) => {
   try {
-    const detail = await getAmazon2023ProductDetail(req.params.productId);
+    const context = queryContexts.get(req.params.queryId);
+    const locale = readLocale(req.query.locale ?? context?.locale);
+    const detail = await getAmazon2023ProductDetail(req.params.productId, undefined, locale);
     if (!detail) {
       return sendError(res, 404, "DATASET_NOT_FOUND", "Amazon Reviews 2023 dataset has not been imported yet.");
     }
@@ -1741,6 +2083,41 @@ amazon2023AiRouter.get("/query/:queryId/items/:productId/evidence", async (req, 
       productId: detail.product.id,
       dimension: dimension ?? "all",
       evidence: reviewEvidence(detail.product, mode, dimension),
+      overlay: buildEvidenceOverlay(detail.product, dimension),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+amazon2023AiRouter.post("/stress-test", async (req, res, next) => {
+  try {
+    const parsed = stressTestBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(res, 400, "INVALID_REQUEST", "queryId, optional selectedProductIds, and stress weights are required.");
+    }
+    const context = queryContexts.get(parsed.data.queryId);
+    if (!context) {
+      return sendError(res, 404, "QUERY_NOT_FOUND", "AI query context has expired. Submit a new AI query.");
+    }
+    const selectedProductIds = parsed.data.selectedProductIds.length
+      ? parsed.data.selectedProductIds
+      : context.itemIds.slice(0, MAX_COMPARE_ITEMS);
+    if (selectedProductIds.length < 2) {
+      return sendError(res, 400, "INVALID_REQUEST", "At least two products are required for preference stress testing.");
+    }
+    const locale = readLocale(parsed.data.locale ?? context.locale);
+    const details = await getAmazon2023ProductDetails(selectedProductIds.slice(0, MAX_COMPARE_ITEMS), undefined, locale);
+    if (!details) {
+      return sendError(res, 404, "DATASET_NOT_FOUND", "Amazon Reviews 2023 dataset has not been imported yet.");
+    }
+    const products = details.products.filter(Boolean) as NonNullable<ProductDetailResponse>[];
+    if (products.length < 2) {
+      return sendError(res, 404, "PRODUCT_NOT_FOUND", "At least two selected products must exist.");
+    }
+    return res.json({
+      queryId: parsed.data.queryId,
+      stressTest: buildStressTest(products, parsed.data.weights),
     });
   } catch (error) {
     return next(error);
@@ -1754,9 +2131,10 @@ amazon2023AiRouter.post("/compare", async (req, res, next) => {
       return sendError(res, 400, "INVALID_REQUEST", "queryId, 2-4 selectedProductIds, and activeDimensions are required.");
     }
     const context = queryContexts.get(parsed.data.queryId);
+    const locale = readLocale(parsed.data.locale ?? context?.locale);
     const dimensions = context?.dimensions ?? buildDimensions();
     const activeDimensions = parsed.data.activeDimensions.length ? parsed.data.activeDimensions : dimensions.filter((dimension) => dimension.active).map((dimension) => dimension.key);
-    const details = await getAmazon2023ProductDetails(parsed.data.selectedProductIds);
+    const details = await getAmazon2023ProductDetails(parsed.data.selectedProductIds, undefined, locale);
     if (!details) {
       return sendError(res, 404, "DATASET_NOT_FOUND", "Amazon Reviews 2023 dataset has not been imported yet.");
     }
@@ -1802,7 +2180,8 @@ amazon2023AiRouter.post("/refine", async (req, res, next) => {
     if (/more evidence|thin evidence|리뷰|근거/i.test(parsed.data.command)) {
       filters.ratingMin = Math.max(filters.ratingMin ?? 0, 4);
     }
-    const result = await searchAmazon2023Products({ ...filters, limit: MAX_AI_ITEMS, offset: 0, sort: "rating_desc" });
+    const locale = readLocale(parsed.data.locale ?? context.locale);
+    const result = await searchAmazon2023Products({ ...filters, locale, limit: MAX_AI_ITEMS, offset: 0, sort: "rating_desc" });
     if (!result) {
       return sendError(res, 404, "DATASET_NOT_FOUND", "Amazon Reviews 2023 dataset has not been imported yet.");
     }
@@ -1811,11 +2190,15 @@ amazon2023AiRouter.post("/refine", async (req, res, next) => {
       active: parsed.data.activeDimensions.length ? parsed.data.activeDimensions.includes(dimension.key) : dimension.active,
     }));
     const parsedCriteria = mergeParsedCriteria(buildParsedCriteria(filters, `${context.query} ${parsed.data.command}`), lens.criteriaHints, lens.source === "gemini" ? "gemini_natural_language" : "rule_natural_language");
-    const items = result.items.map(attachDecisionEvidence);
+    let items = result.items.map(attachDecisionEvidence);
+    if (shouldDiversifyUngenderedResults(filters, context.query)) {
+      items = diversifyUngenderedResults(items);
+    }
     const previous = new Set(context.itemIds);
     const nextIds = new Set(items.map((item) => item.id));
     storeContext(parsed.data.queryId, {
       ...context,
+      locale,
       filters,
       dimensions,
       parsedCriteria,
@@ -1828,6 +2211,7 @@ amazon2023AiRouter.post("/refine", async (req, res, next) => {
       updateSummary: `Updated lens: ${parsed.data.command}`,
       removedItems: [...previous].filter((id) => !nextIds.has(id)).slice(0, 4).map((productId) => ({ productId, reason: "Removed by refined Amazon 2023 filters." })),
       addedItems: items.filter((item) => !previous.has(item.id)).slice(0, 4).map((item) => ({ productId: item.id, reason: "Added by refined Amazon 2023 filters." })),
+      decomposition: buildDecompositionDiagnostics(lens, filters, result.pagination.total),
       parsedCriteria,
       clarifications: [],
       comparisonDimensions: dimensions,
